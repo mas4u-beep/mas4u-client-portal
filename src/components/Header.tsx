@@ -21,8 +21,8 @@ import {
 } from '@/components/ui/sheet';
 import { useEffect, useState, useRef } from 'react';
 import { api } from '@/src/services/api';
-import { onDBChange } from '@/src/lib/mockData';
-import { Notification, Document, KnowledgeArticle } from '@/src/types';
+import { onDBChange, getDB } from '@/src/lib/mockData';
+import { Notification, Document, KnowledgeArticle, User } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +37,7 @@ const navItems = [
 export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: () => void; onTabChange?: (tab: string) => void }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{docs: Document[], articles: KnowledgeArticle[]}>({ docs: [], articles: [] });
+  const [searchResults, setSearchResults] = useState<{docs: Document[], articles: KnowledgeArticle[], clients: User[]}>({ docs: [], articles: [], clients: [] });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -68,10 +68,25 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
           api.getKnowledgeBase()
         ]);
         
+        const q = searchQuery.toLowerCase();
+        // Admins can search all clients by name / email / ID number / client number.
+        let clients: User[] = [];
+        if (user?.role === 'admin') {
+          const all = getDB().users || [];
+          clients = all.filter((u: User) =>
+            u.role === 'client' && (
+              u.name?.toLowerCase().includes(q) ||
+              u.email?.toLowerCase().includes(q) ||
+              (u.idNumber || '').includes(searchQuery) ||
+              (u.clientNumber || '').includes(searchQuery)
+            )
+          ).slice(0, 6);
+        }
         setIsSearchOpen(true);
         setSearchResults({
-          docs: docs.filter((d: Document) => d.name.toLowerCase().includes(searchQuery.toLowerCase())),
-          articles: knowledge.filter((a: KnowledgeArticle) => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.excerpt.toLowerCase().includes(searchQuery.toLowerCase()))
+          docs: docs.filter((d: Document) => d.name.toLowerCase().includes(q)),
+          articles: knowledge.filter((a: KnowledgeArticle) => a.title.toLowerCase().includes(q) || a.excerpt.toLowerCase().includes(q)),
+          clients,
         });
       };
       fetchResults();
@@ -152,12 +167,33 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
                 exit={{ opacity: 0, y: -10 }}
                 className="absolute top-full left-0 right-0 mt-2 bg-background/95 backdrop-blur-xl border border-border/50 shadow-2xl rounded-2xl overflow-hidden z-50 max-h-[400px] overflow-y-auto"
               >
-                {searchResults.docs.length === 0 && searchResults.articles.length === 0 ? (
+                {searchResults.docs.length === 0 && searchResults.articles.length === 0 && searchResults.clients.length === 0 ? (
                   <div className="p-4 text-center text-muted-foreground text-sm">
                     לא נמצאו תוצאות ל"{searchQuery}"
                   </div>
                 ) : (
                   <div className="py-2">
+                    {searchResults.clients.length > 0 && (
+                      <div className="px-3 pb-2">
+                        <h4 className="text-xs font-bold text-muted-foreground mb-2 px-2">לקוחות</h4>
+                        {searchResults.clients.map(client => (
+                          <button
+                            key={client.id}
+                            onClick={() => handleSearchResultClick('לקוחות')}
+                            className="w-full text-right flex items-center gap-2 p-2 rounded-lg hover:bg-primary/5 transition-colors"
+                          >
+                            <UserIcon className="h-4 w-4 text-primary" />
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">{client.name}{client.clientNumber ? ` · #${client.clientNumber}` : ''}</span>
+                              <span className="text-xs text-muted-foreground">{client.idNumber ? `ת"ז ${client.idNumber}` : client.email}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.clients.length > 0 && (searchResults.docs.length > 0 || searchResults.articles.length > 0) && <DropdownMenuSeparator />}
+
                     {searchResults.docs.length > 0 && (
                       <div className="px-3 pb-2">
                         <h4 className="text-xs font-bold text-muted-foreground mb-2 px-2">מסמכים</h4>

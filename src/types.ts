@@ -178,6 +178,12 @@ export interface Deadline {
   createdBy?: string;
 }
 
+export interface MessageTemplate {
+  id: string;
+  title: string;
+  text: string; // supports {name} placeholder
+}
+
 export interface DB {
   users: User[];
   documents: Document[];
@@ -190,4 +196,5 @@ export interface DB {
   teamTasks: TeamTask[];
   activityLog?: ActivityEntry[];
   deadlines?: Deadline[];
+  messageTemplates?: MessageTemplate[];
 }

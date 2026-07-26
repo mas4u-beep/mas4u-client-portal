@@ -1,4 +1,12 @@
-import { User, Document, Message, Notification, KnowledgeArticle, TimelineEvent, Appointment, Employee, TeamTask, ActivityEntry, Deadline } from '../types';
+import { User, Document, Message, Notification, KnowledgeArticle, TimelineEvent, Appointment, Employee, TeamTask, ActivityEntry, Deadline, MessageTemplate } from '../types';
+
+export const DEFAULT_TEMPLATES: MessageTemplate[] = [
+  { id: 'tpl-docs', title: 'תזכורת מסמכים חסרים', text: 'שלום {name}, חסרים לנו מספר מסמכים להמשך הטיפול. נשמח שתעביר/י אותם בהקדם. תודה, משרד Mas4U' },
+  { id: 'tpl-received', title: 'אישור קבלת מסמכים', text: 'שלום {name}, קיבלנו את המסמכים ששלחת — תודה! נעדכן בהמשך הטיפול. משרד Mas4U' },
+  { id: 'tpl-annual', title: 'תזכורת דוח שנתי', text: 'שלום {name}, לקראת הכנת הדוח השנתי נשמח לקבל את המסמכים הנדרשים. תודה, משרד Mas4U' },
+  { id: 'tpl-meeting', title: 'תיאום פגישה', text: 'שלום {name}, נשמח לתאם פגישה לעדכון וטיפול בתיק. מתי נוח לך? משרד Mas4U' },
+  { id: 'tpl-greeting', title: 'ברכת חג', text: 'שלום {name}, חג שמח מכל צוות משרד Mas4U! 🎉' },
+];
 
 const STORAGE_KEY = 'mas4u_db';
 
@@ -14,6 +22,7 @@ export interface DB {
   teamTasks: TeamTask[];
   activityLog?: ActivityEntry[];
   deadlines?: Deadline[];
+  messageTemplates?: MessageTemplate[];
 }
 
 const INITIAL_DB: DB = {
@@ -178,6 +187,7 @@ const normalize = (parsed: Partial<DB> | null | undefined): DB => ({
   teamTasks: parsed?.teamTasks || INITIAL_DB.teamTasks,
   activityLog: parsed?.activityLog || [],
   deadlines: parsed?.deadlines || [],
+  messageTemplates: parsed?.messageTemplates ?? DEFAULT_TEMPLATES,
 });
 
 const readLocal = (): DB => {

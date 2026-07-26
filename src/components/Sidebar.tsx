@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock, LayoutGrid, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -23,6 +23,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
     ? [
         { icon: LayoutDashboard, label: 'לוח בקרה', href: '#', active: activeTab === 'לוח בקרה' },
         { icon: Users, label: 'לקוחות', href: '#', active: activeTab === 'לקוחות' },
+        { icon: LayoutGrid, label: 'תמונת מצב תיקים', href: '#', active: activeTab === 'תמונת מצב תיקים' },
         { icon: FileText, label: 'מסמכים', href: '#', active: activeTab === 'מסמכים' },
         { icon: BookOpen, label: 'דוחות שנתיים', href: '#', active: activeTab === 'דוחות שנתיים' },
         { icon: Bot, label: 'אוטומציות וסוכנים', href: '#', active: activeTab === 'אוטומציות וסוכנים' },
@@ -30,6 +31,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
       { icon: ClipboardList, label: 'משימות צוות', href: '#', active: activeTab === 'משימות צוות' },
         { icon: CalendarClock, label: 'מעקב דדליינים', href: '#', active: activeTab === 'מעקב דדליינים' },
         { icon: History, label: 'יומן פעילות', href: '#', active: activeTab === 'יומן פעילות' },
+        { icon: TrendingUp, label: 'סיכום שבועי', href: '#', active: activeTab === 'סיכום שבועי' },
         { icon: MessageSquare, label: 'פניות וצ\'אט', href: '#', active: activeTab === 'פניות וצ\'אט' },
         { icon: Settings, label: 'הגדרות', href: '#', active: activeTab === 'הגדרות' },
       ]

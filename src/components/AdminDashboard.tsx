@@ -1,4 +1,5 @@
-import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot, FileCheck, ClipboardList, Lightbulb, Eye, BarChart3 } from 'lucide-react';
+import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot, FileCheck, ClipboardList, Lightbulb, Eye, BarChart3, LayoutGrid, Trash2, MessageCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     externalTab === 'פניות וצ\'אט' ? 'messages' :
     externalTab === 'יומן פעילות' ? 'activity' :
     externalTab === 'מעקב דדליינים' ? 'deadlines' :
+    externalTab === 'תמונת מצב תיקים' ? 'pipeline' :
+    externalTab === 'סיכום שבועי' ? 'weekly' :
     externalTab === 'הגדרות' ? 'settings' : 'overview'
   ) : internalTab;
 
@@ -50,6 +53,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         val === 'messages' ? 'פניות וצ\'אט' :
         val === 'activity' ? 'יומן פעילות' :
         val === 'deadlines' ? 'מעקב דדליינים' :
+        val === 'pipeline' ? 'תמונת מצב תיקים' :
+        val === 'weekly' ? 'סיכום שבועי' :
         val === 'settings' ? 'הגדרות' : 'לוח בקרה';
       onTabChange(label);
     } else {
@@ -319,6 +324,62 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
   };
 
   const activityLog = [...(db.activityLog || [])].reverse(); // newest first
+
+  // ---- Client pipeline (kanban) ----
+  const PIPELINE_STAGES: { key: NonNullable<User['annualReportStatus']>; label: string; color: string }[] = [
+    { key: 'not_started', label: 'טרם התחיל', color: 'bg-gray-400' },
+    { key: 'collecting_docs', label: 'איסוף מסמכים', color: 'bg-amber-500' },
+    { key: 'in_preparation', label: 'בהכנה', color: 'bg-blue-500' },
+    { key: 'submitted', label: 'שודר', color: 'bg-purple-500' },
+    { key: 'completed', label: 'הושלם', color: 'bg-green-500' },
+  ];
+  const clientsList = db.users.filter((u) => u.role === 'client');
+  const moveClientStage = (userId: string, stage: NonNullable<User['annualReportStatus']>) => {
+    const u = db.users.find((x) => x.id === userId);
+    if (!u || u.annualReportStatus === stage) return;
+    const newDb = { ...db, users: db.users.map((x) => (x.id === userId ? { ...x, annualReportStatus: stage } : x)) };
+    setDb(newDb); saveDB(newDb);
+    logActivity('עדכן שלב תיק', `${u.name} → ${PIPELINE_STAGES.find((s) => s.key === stage)?.label}`);
+    refreshData();
+  };
+
+  // ---- Weekly summary ----
+  const weekAgo = Date.now() - 7 * 86400000;
+  const recentActs = (db.activityLog || []).filter((a) => new Date(a.at).getTime() >= weekAgo);
+  const weekStats = {
+    completedTasks: recentActs.filter((a) => a.action === 'סיים משימה').length,
+    newClients: recentActs.filter((a) => a.action === 'הוסיף לקוח').length,
+    reminders: recentActs.filter((a) => a.action.includes('תזכורת')).length,
+    newTasks: recentActs.filter((a) => a.action === 'הקצה משימה').length,
+  };
+  const completedByEmployee = (db.employees || []).map((emp) => ({
+    name: emp.name,
+    done: recentActs.filter((a) => a.action === 'סיים משימה' && a.actor === emp.name).length,
+  }));
+  const stuckTasks = allTasks.filter((t) => !t.isDone && t.priority === 'high');
+
+  // ---- WhatsApp templates ----
+  const templates = db.messageTemplates || [];
+  const [newTemplate, setNewTemplate] = useState({ title: '', text: '' });
+  const addTemplate = () => {
+    if (!newTemplate.title || !newTemplate.text) { setAlertMessage('יש למלא כותרת ותוכן לתבנית'); return; }
+    const tpl = { id: `tpl-${Date.now()}`, title: newTemplate.title, text: newTemplate.text };
+    const newDb = { ...db, messageTemplates: [...templates, tpl] };
+    setDb(newDb); saveDB(newDb); refreshData();
+    setNewTemplate({ title: '', text: '' });
+  };
+  const deleteTemplate = (id: string) => {
+    const newDb = { ...db, messageTemplates: templates.filter((t) => t.id !== id) };
+    setDb(newDb); saveDB(newDb); refreshData();
+  };
+  const sendTemplateWhatsApp = (u: any, tplText: string) => {
+    if (!u.phone) { setAlertMessage('לא הוזן מספר טלפון ללקוח זה.'); return; }
+    const text = tplText.replace(/\{name\}/g, u.firstName || u.name);
+    const phone = String(u.phone).replace(/\D/g, '');
+    const waLink = `https://wa.me/972${phone.startsWith('0') ? phone.substring(1) : phone}?text=${encodeURIComponent(text)}`;
+    window.open(waLink, '_blank');
+    logActivity('שלח הודעת וואטסאפ', u.name);
+  };
 
   // Quick-access tiles for the personal dashboard hub.
   const hubTiles = [
@@ -1196,6 +1257,27 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                             <UserCheck className="h-4 w-4" />
                             תיק לקוח
                           </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <Button variant="outline" size="sm" className="rounded-full gap-2 text-green-600 border-green-200 hover:bg-green-50">
+                                <MessageCircle className="h-4 w-4" />
+                                וואטסאפ
+                              </Button>
+                            } />
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel>שליחת הודעה מתבנית</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {templates.length === 0 ? (
+                                <DropdownMenuItem disabled>אין תבניות (הוסף בהגדרות)</DropdownMenuItem>
+                              ) : (
+                                templates.map((tpl) => (
+                                  <DropdownMenuItem key={tpl.id} onClick={() => sendTemplateWhatsApp(user, tpl.text)}>
+                                    {tpl.title}
+                                  </DropdownMenuItem>
+                                ))
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             variant={user.isWatched ? 'default' : 'outline'}
                             size="sm"
@@ -1361,8 +1443,149 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                   <Button variant="outline" size="sm" className="rounded-full">+</Button>
                 </div>
               </div>
+
+              {/* WhatsApp message templates */}
+              <div className="space-y-3 pt-4 border-t">
+                <div>
+                  <h3 className="text-sm font-bold flex items-center gap-2"><MessageCircle className="h-4 w-4 text-green-600" />תבניות הודעות וואטסאפ</h3>
+                  <p className="text-xs text-muted-foreground">השתמשו ב-{'{name}'} כדי לשלב את שם הלקוח אוטומטית. התבניות זמינות בכפתור "וואטסאפ" בכל לקוח.</p>
+                </div>
+                <div className="space-y-2">
+                  {templates.map((tpl) => (
+                    <div key={tpl.id} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-background border border-border/50">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold">{tpl.title}</p>
+                        <p className="text-xs text-muted-foreground">{tpl.text}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500 shrink-0" onClick={() => deleteTemplate(tpl.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start pt-2">
+                  <Input value={newTemplate.title} onChange={(e) => setNewTemplate({ ...newTemplate, title: e.target.value })} placeholder="כותרת התבנית" className="h-10 rounded-xl" />
+                  <Textarea value={newTemplate.text} onChange={(e) => setNewTemplate({ ...newTemplate, text: e.target.value })} placeholder="תוכן ההודעה (אפשר {name})" className="md:col-span-2 min-h-[44px] rounded-xl text-sm" />
+                </div>
+                <Button onClick={addTemplate} className="rounded-full gap-2"><Plus className="h-4 w-4" />הוסף תבנית</Button>
+              </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Client pipeline (kanban) */}
+        <TabsContent value="pipeline">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="bg-primary/5 border-b border-primary/10">
+              <CardTitle className="flex items-center gap-2"><LayoutGrid className="h-5 w-5 text-primary" />תמונת מצב תיקים</CardTitle>
+              <CardDescription>גררו לקוח בין העמודות כדי לעדכן את שלב הטיפול (או השתמשו בתפריט בכל כרטיס)</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {PIPELINE_STAGES.map((stage) => {
+                  const inStage = clientsList.filter((u) => (u.annualReportStatus || 'not_started') === stage.key);
+                  return (
+                    <div
+                      key={stage.key}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) moveClientStage(id, stage.key); }}
+                      className="rounded-2xl bg-muted/30 p-2 min-h-[300px] flex flex-col"
+                    >
+                      <div className="flex items-center gap-2 px-2 py-2 sticky top-0">
+                        <span className={cn('h-2.5 w-2.5 rounded-full', stage.color)} />
+                        <span className="text-sm font-bold">{stage.label}</span>
+                        <span className="text-xs text-muted-foreground mr-auto">{inStage.length}</span>
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        {inStage.map((u) => (
+                          <div
+                            key={u.id}
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData('text/plain', u.id)}
+                            className="p-3 rounded-xl bg-background border border-border/50 shadow-sm cursor-grab active:cursor-grabbing"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-sm font-bold truncate">{u.name}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger render={<button className="text-muted-foreground hover:text-primary shrink-0"><MoreVertical className="h-4 w-4" /></button>} />
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>העבר לשלב</DropdownMenuLabel>
+                                  {PIPELINE_STAGES.filter((s) => s.key !== stage.key).map((s) => (
+                                    <DropdownMenuItem key={s.key} onClick={() => moveClientStage(u.id, s.key)}>{s.label}</DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            {u.clientNumber && <span className="text-[10px] text-muted-foreground">#{u.clientNumber}</span>}
+                            {u.assignedEmployee && <div className="text-[10px] text-primary mt-1">אחראי: {u.assignedEmployee}</div>}
+                          </div>
+                        ))}
+                        {inStage.length === 0 && <div className="text-center text-[11px] text-muted-foreground py-4">—</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Weekly summary for the boss */}
+        <TabsContent value="weekly" className="space-y-6">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="bg-primary/5 border-b border-primary/10">
+              <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" />סיכום שבועי</CardTitle>
+              <CardDescription>מבט מהיר על 7 הימים האחרונים</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'משימות שהושלמו', val: weekStats.completedTasks, color: 'text-green-600' },
+                  { label: 'משימות חדשות', val: weekStats.newTasks, color: 'text-primary' },
+                  { label: 'לקוחות חדשים', val: weekStats.newClients, color: 'text-blue-600' },
+                  { label: 'תזכורות שנשלחו', val: weekStats.reminders, color: 'text-amber-600' },
+                ].map((s) => (
+                  <div key={s.label} className="p-4 rounded-2xl border border-border/50 bg-background text-center">
+                    <div className={cn('text-3xl font-black', s.color)}>{s.val}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10">
+                <CardTitle className="text-lg">ביצועי עובדים (השבוע)</CardTitle>
+                <CardDescription>משימות שהושלמו לכל עובד</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {completedByEmployee.map((e) => (
+                  <div key={e.name} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border/50">
+                    <span className="text-sm font-bold">{e.name}</span>
+                    <span className="text-sm"><b className="text-green-600">{e.done}</b> הושלמו</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-red-50 border-b border-red-100">
+                <CardTitle className="text-lg text-red-800">מה תקוע (משימות דחופות פתוחות)</CardTitle>
+                <CardDescription className="text-red-700/80">{stuckTasks.length > 0 ? `${stuckTasks.length} משימות דחופות ממתינות` : 'אין משימות דחופות תקועות 🎉'}</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {stuckTasks.slice(0, 8).map((t) => (
+                  <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-red-50/50 border border-red-100">
+                    <span className="text-sm font-medium">{t.task}</span>
+                    <span className="text-[10px] text-muted-foreground">{t.assigneeName || ''}</span>
+                  </div>
+                ))}
+                {stuckTasks.length === 0 && <div className="text-center text-sm text-muted-foreground py-6">הכל תחת שליטה</div>}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Activity log */}
