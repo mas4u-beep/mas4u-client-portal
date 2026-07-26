@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -28,6 +28,8 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
         { icon: Bot, label: 'אוטומציות וסוכנים', href: '#', active: activeTab === 'אוטומציות וסוכנים' },
         { icon: Lightbulb, label: 'ניהול ידע', href: '#', active: activeTab === 'ניהול ידע' },
       { icon: ClipboardList, label: 'משימות צוות', href: '#', active: activeTab === 'משימות צוות' },
+        { icon: CalendarClock, label: 'מעקב דדליינים', href: '#', active: activeTab === 'מעקב דדליינים' },
+        { icon: History, label: 'יומן פעילות', href: '#', active: activeTab === 'יומן פעילות' },
         { icon: MessageSquare, label: 'פניות וצ\'אט', href: '#', active: activeTab === 'פניות וצ\'אט' },
         { icon: Settings, label: 'הגדרות', href: '#', active: activeTab === 'הגדרות' },
       ]

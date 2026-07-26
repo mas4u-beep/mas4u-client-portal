@@ -1,4 +1,4 @@
-import { User, Document, Message, Notification, KnowledgeArticle, TimelineEvent, Appointment, Employee, TeamTask } from '../types';
+import { User, Document, Message, Notification, KnowledgeArticle, TimelineEvent, Appointment, Employee, TeamTask, ActivityEntry, Deadline } from '../types';
 
 const STORAGE_KEY = 'mas4u_db';
 
@@ -12,6 +12,8 @@ export interface DB {
   appointments: Appointment[];
   employees: Employee[];
   teamTasks: TeamTask[];
+  activityLog?: ActivityEntry[];
+  deadlines?: Deadline[];
 }
 
 const INITIAL_DB: DB = {
@@ -174,6 +176,8 @@ const normalize = (parsed: Partial<DB> | null | undefined): DB => ({
   appointments: parsed?.appointments || INITIAL_DB.appointments,
   employees: parsed?.employees || INITIAL_DB.employees,
   teamTasks: parsed?.teamTasks || INITIAL_DB.teamTasks,
+  activityLog: parsed?.activityLog || [],
+  deadlines: parsed?.deadlines || [],
 });
 
 const readLocal = (): DB => {
@@ -330,6 +334,26 @@ export const initDB = async (): Promise<void> => {
 export const onDBChange = (callback: () => void): (() => void) => {
   window.addEventListener(DB_CHANGED_EVENT, callback);
   return () => window.removeEventListener(DB_CHANGED_EVENT, callback);
+};
+
+// ---------------------------------------------------------------------------
+// Activity log — records who did what, when (office oversight / audit).
+// ---------------------------------------------------------------------------
+let _currentActor = 'משתמש';
+export const setCurrentActor = (name?: string) => {
+  if (name) _currentActor = name;
+};
+
+export const logActivity = (action: string, detail?: string) => {
+  const entry: ActivityEntry = {
+    id: `act-${Date.now()}-${_cache.activityLog?.length || 0}`,
+    at: new Date().toISOString(),
+    actor: _currentActor,
+    action,
+    detail,
+  };
+  const log = [...(_cache.activityLog || []), entry].slice(-500); // keep last 500
+  saveDB({ ..._cache, activityLog: log });
 };
 
 export const addUser = (user: User) => {

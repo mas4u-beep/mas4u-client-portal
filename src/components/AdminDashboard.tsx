@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '@/src/services/api';
-import { getDB, saveDB } from '@/src/lib/mockData';
+import { getDB, saveDB, logActivity } from '@/src/lib/mockData';
 import { User, Document, EmployeeName } from '@/src/types';
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     externalTab === 'משימות צוות' ? 'tasks' :
     externalTab === 'ניהול ידע' ? 'kb' :
     externalTab === 'פניות וצ\'אט' ? 'messages' :
+    externalTab === 'יומן פעילות' ? 'activity' :
+    externalTab === 'מעקב דדליינים' ? 'deadlines' :
     externalTab === 'הגדרות' ? 'settings' : 'overview'
   ) : internalTab;
 
@@ -46,6 +48,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         val === 'tasks' ? 'משימות צוות' :
         val === 'kb' ? 'ניהול ידע' :
         val === 'messages' ? 'פניות וצ\'אט' :
+        val === 'activity' ? 'יומן פעילות' :
+        val === 'deadlines' ? 'מעקב דדליינים' :
         val === 'settings' ? 'הגדרות' : 'לוח בקרה';
       onTabChange(label);
     } else {
@@ -64,6 +68,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     companyId: '',
     personalCode: '',
   });
+
+  const [newDeadline, setNewDeadline] = useState({ title: '', date: '', clientName: '', note: '' });
 
   const refreshData = () => {
     setDb(getDB());
@@ -146,6 +152,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         status: 'active',
       });
       setIsAddingClient(false);
+      logActivity('הוסיף לקוח', newClient.name);
       setNewClient({ name: '', email: '', clientNumber: '', companyId: '', personalCode: '' });
       refreshData();
       setAlertMessage('לקוח חדש נוסף בהצלחה!');
@@ -179,6 +186,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
       user.status = 'active';
       setDb(newDb);
       saveDB(newDb);
+      logActivity('אישר לקוח', user.name);
       refreshData();
       setAlertMessage(`הלקוח ${user.name} אושר בהצלחה.`);
     }
@@ -223,6 +231,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     const phone = String(u.phone).replace(/\D/g, '');
     const waLink = `https://wa.me/972${phone.startsWith('0') ? phone.substring(1) : phone}?text=${encodeURIComponent(text)}`;
     window.open(waLink, '_blank');
+    logActivity('שלח תזכורת וואטסאפ', `${u.name} (${kind === 'annual' ? 'דוח שנתי' : 'שוטף'})`);
   };
 
   // Clients placed under follow-up / watch.
@@ -243,6 +252,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     }
     setDb(newDb);
     saveDB(newDb);
+    logActivity(u.isWatched ? 'סימן לקוח במעקב' : 'הסיר לקוח ממעקב', u.name);
     refreshData();
   };
 
@@ -257,6 +267,58 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     };
   });
   const maxLoad = Math.max(1, ...workload.map((w) => w.total));
+
+  // ---- Deadlines & alerts ----
+  const toISODate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const buildBuiltinDeadlines = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    // Next occurrence of the 15th (VAT / advances / withholding monthly reporting).
+    let d15 = new Date(y, m, 15);
+    if (d15 < today) d15 = new Date(y, m + 1, 15);
+    return [
+      { id: `builtin-15-${toISODate(d15)}`, title: 'דיווח מע"מ, מקדמות מס הכנסה וניכויים', date: toISODate(d15), kind: 'report' as const, builtin: true },
+    ];
+  };
+  const daysUntil = (isoDate: string) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(isoDate + 'T00:00:00');
+    return Math.round((d.getTime() - today.getTime()) / 86400000);
+  };
+  const allDeadlines = [...buildBuiltinDeadlines(), ...((db.deadlines || []).map((d) => ({ ...d, builtin: false })))]
+    .map((d) => ({ ...d, daysLeft: daysUntil(d.date) }))
+    .filter((d) => d.daysLeft >= -1)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const upcomingDeadlines = allDeadlines.filter((d) => d.daysLeft <= 14);
+
+  const addDeadline = () => {
+    if (!newDeadline.title || !newDeadline.date) {
+      setAlertMessage('יש למלא כותרת ותאריך לדדליין');
+      return;
+    }
+    const dl = {
+      id: `dl-${Date.now()}`,
+      title: newDeadline.title,
+      date: newDeadline.date,
+      kind: 'custom' as const,
+      clientName: newDeadline.clientName || undefined,
+      note: newDeadline.note || undefined,
+      createdBy: currentUser?.name,
+    };
+    const newDb = { ...db, deadlines: [...(db.deadlines || []), dl] };
+    setDb(newDb); saveDB(newDb);
+    logActivity('הוסיף דדליין', `${dl.title} (${dl.date})`);
+    setNewDeadline({ title: '', date: '', clientName: '', note: '' });
+    refreshData();
+  };
+  const deleteDeadline = (id: string) => {
+    const newDb = { ...db, deadlines: (db.deadlines || []).filter((d) => d.id !== id) };
+    setDb(newDb); saveDB(newDb); refreshData();
+  };
+
+  const activityLog = [...(db.activityLog || [])].reverse(); // newest first
 
   // Quick-access tiles for the personal dashboard hub.
   const hubTiles = [
@@ -576,6 +638,38 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
               </CardContent>
             </Card>
           </div>
+
+          {/* Upcoming deadlines alert */}
+          {upcomingDeadlines.length > 0 && (
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />דדליינים קרובים</CardTitle>
+                  <CardDescription>מועדים ב-14 הימים הקרובים</CardDescription>
+                </div>
+                <Button size="sm" variant="ghost" className="rounded-full text-primary" onClick={() => handleTabChange('deadlines')}>לכל הדדליינים</Button>
+              </CardHeader>
+              <CardContent className="p-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {upcomingDeadlines.slice(0, 6).map((d: any) => {
+                    const urgent = d.daysLeft <= 5;
+                    return (
+                      <div key={d.id} className={cn('flex items-center gap-3 p-3 rounded-xl border', urgent ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200')}>
+                        <div className={cn('h-9 w-9 rounded-lg flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-500' : 'bg-amber-500')}>
+                          <span className="text-xs font-bold leading-none">{d.daysLeft}</span>
+                          <span className="text-[8px]">ימים</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate">{d.title}</p>
+                          {d.clientName && <p className="text-[10px] text-muted-foreground truncate">{d.clientName}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {pendingUsers.length > 0 && (
             <Card className="border-amber-200 shadow-sm bg-amber-50/50">
@@ -1267,6 +1361,101 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                   <Button variant="outline" size="sm" className="rounded-full">+</Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Activity log */}
+        <TabsContent value="activity">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="bg-primary/5 border-b border-primary/10">
+              <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" />יומן פעילות</CardTitle>
+              <CardDescription>תיעוד אוטומטי של פעולות במערכת — מי עשה מה ומתי</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              {activityLog.length === 0 ? (
+                <div className="text-center text-sm text-muted-foreground py-10">עדיין אין פעילות מתועדת</div>
+              ) : (
+                <div className="space-y-2">
+                  {activityLog.slice(0, 100).map((a) => (
+                    <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl bg-background border border-border/50">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-xs font-bold">
+                        {(a.actor || '?').charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">
+                          <b>{a.actor}</b> — {a.action}
+                          {a.detail && <span className="text-muted-foreground"> · {a.detail}</span>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {new Date(a.at).toLocaleString('he-IL')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Deadlines */}
+        <TabsContent value="deadlines" className="space-y-6">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="bg-primary/5 border-b border-primary/10">
+              <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />מעקב דדליינים</CardTitle>
+              <CardDescription>מועדי דיווח, פקיעת ניכוי במקור ותזכורות מותאמות אישית</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end pb-2 border-b">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-muted-foreground">כותרת</label>
+                  <Input value={newDeadline.title} onChange={(e) => setNewDeadline({ ...newDeadline, title: e.target.value })} placeholder="לדוגמה: פקיעת ניכוי במקור - חברת א.ב.ג" className="h-10 rounded-full" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-muted-foreground">תאריך</label>
+                  <Input type="date" value={newDeadline.date} onChange={(e) => setNewDeadline({ ...newDeadline, date: e.target.value })} className="h-10 rounded-full" dir="ltr" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-muted-foreground">לקוח (אופציונלי)</label>
+                  <Input value={newDeadline.clientName} onChange={(e) => setNewDeadline({ ...newDeadline, clientName: e.target.value })} placeholder="שם לקוח" className="h-10 rounded-full" />
+                </div>
+                <Button onClick={addDeadline} className="h-10 rounded-full gap-2"><Plus className="h-4 w-4" />הוסף</Button>
+              </div>
+
+              {allDeadlines.length === 0 ? (
+                <div className="text-center text-sm text-muted-foreground py-8">אין דדליינים קרובים</div>
+              ) : (
+                <div className="space-y-2">
+                  {allDeadlines.map((d: any) => {
+                    const urgent = d.daysLeft <= 5;
+                    const soon = d.daysLeft <= 14;
+                    return (
+                      <div key={d.id} className={cn('flex items-center justify-between gap-3 p-3 rounded-xl border', urgent ? 'bg-red-50 border-red-200' : soon ? 'bg-amber-50 border-amber-200' : 'bg-background border-border/50')}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={cn('h-10 w-10 rounded-xl flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-500' : soon ? 'bg-amber-500' : 'bg-primary')}>
+                            <span className="text-sm font-bold leading-none">{d.daysLeft < 0 ? '!' : d.daysLeft}</span>
+                            <span className="text-[8px]">{d.daysLeft < 0 ? 'עבר' : 'ימים'}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">{d.title}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {new Date(d.date + 'T00:00:00').toLocaleDateString('he-IL')}
+                              {d.clientName && ` · ${d.clientName}`}
+                              {d.builtin && ' · מועד קבוע'}
+                            </p>
+                          </div>
+                        </div>
+                        {!d.builtin && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500 shrink-0" onClick={() => deleteDeadline(d.id)}>
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

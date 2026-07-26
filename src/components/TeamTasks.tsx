@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CheckCircle, Plus, Trash2, User as UserIcon, Bell, ArrowLeftRight, UserPlus, KeyRound, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Employee, TeamTask, DB, User, Notification } from '@/src/types';
+import { logActivity } from '@/src/lib/mockData';
 import { toast } from 'sonner';
 
 interface TeamTasksProps {
@@ -58,6 +59,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
       activity: [{ text: `הוקצתה ל${assignee?.name || ''} ע"י ${myName}`, at: now }],
     };
     commit({ ...db, teamTasks: [...tasks, newTaskObj] }, 'המשימה נוספה בהצלחה');
+    logActivity('הקצה משימה', `"${newTask}" → ${assignee?.name || ''}`);
     setNewTask('');
     setNewTaskPriority('medium');
   };
@@ -76,10 +78,13 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
       };
     });
     commit({ ...db, teamTasks: newTasks }, `המשימה הועברה ל${target?.name || ''}`);
+    logActivity('העביר משימה', `→ ${target?.name || ''}`);
   };
 
   const toggleTaskStatus = (taskId: string) => {
     const now = new Date().toISOString();
+    const original = tasks.find((t) => t.id === taskId);
+    const willBeDone = original ? !original.isDone : false;
     let notif: Notification | null = null;
     const newTasks = tasks.map((t) => {
       if (t.id !== taskId) return t;
@@ -114,6 +119,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
       notifications: notif ? [...(db.notifications || []), notif] : db.notifications,
     };
     commit(newDb);
+    if (willBeDone && original) logActivity('סיים משימה', `"${original.task}"`);
   };
 
   const deleteTask = (taskId: string) => {
@@ -148,6 +154,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
       { ...db, employees: [...employees, newEmp], users: [...db.users, newUser] },
       `${name} נוסף/ה כאיש צוות ויכול/ה להתחבר`
     );
+    logActivity('הוסיף איש צוות', name);
     setNewStaff({ name: '', email: '', code: '' });
   };
 

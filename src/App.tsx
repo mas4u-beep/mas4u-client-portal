@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon, CheckCircle2, AlertCircle, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from './services/api';
-import { initDB, onDBChange } from './lib/mockData';
+import { initDB, onDBChange, setCurrentActor, logActivity } from './lib/mockData';
 import { User } from './types';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -60,6 +60,7 @@ export default function App() {
       try {
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
+        setCurrentActor(parsedUser.name);
         setIsAuthenticated(true);
       } catch (error) {
         console.error('Failed to parse saved user from localStorage:', error);
@@ -90,6 +91,8 @@ export default function App() {
 
   const handleLogin = (userData: User) => {
     setUser(userData);
+    setCurrentActor(userData.name);
+    logActivity('התחברות למערכת');
     setIsAuthenticated(true);
     localStorage.setItem('mas4u_user', JSON.stringify(userData));
     toast.success(`ברוך הבא, ${userData.name}!`, {

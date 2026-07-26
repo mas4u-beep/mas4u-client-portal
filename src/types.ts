@@ -160,6 +160,24 @@ export interface TeamTask {
   activity?: TeamTaskActivity[]; // hand-off / status trail
 }
 
+export interface ActivityEntry {
+  id: string;
+  at: string;        // ISO timestamp
+  actor: string;     // who performed the action
+  action: string;    // short label, e.g. "הוסיף לקוח"
+  detail?: string;   // extra context
+}
+
+export interface Deadline {
+  id: string;
+  title: string;
+  date: string;      // YYYY-MM-DD
+  kind: 'report' | 'withholding' | 'custom';
+  clientName?: string;
+  note?: string;
+  createdBy?: string;
+}
+
 export interface DB {
   users: User[];
   documents: Document[];
@@ -170,4 +188,6 @@ export interface DB {
   messages: Message[];
   employees: Employee[];
   teamTasks: TeamTask[];
+  activityLog?: ActivityEntry[];
+  deadlines?: Deadline[];
 }
