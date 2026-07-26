@@ -38,6 +38,10 @@ jobs:
           # Optional: set a repository secret named GEMINI_API_KEY to enable the AI features.
           # NOTE: on a public site this key becomes visible in the built JS. Leave empty to keep AI off.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Supabase shared database. The anon (public) key is designed to be shipped
+          # in the browser bundle; access is governed by Row Level Security.
+          VITE_SUPABASE_URL: https://evgjmraxekonbklbxyfo.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2Z2ptcmF4ZWtvbmJrbGJ4eWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwOTAzNDAsImV4cCI6MjEwMDY2NjM0MH0.PkdjBMg2HaYR6FOX4ROx_ezdsxi7-ZCUUdYa_2YgCkY
         run: npm run build
 
       - name: Add SPA fallback (404 -> index)
