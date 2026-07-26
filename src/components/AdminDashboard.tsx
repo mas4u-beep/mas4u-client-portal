@@ -1,4 +1,4 @@
-import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot, FileCheck, ClipboardList, Lightbulb } from 'lucide-react';
+import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot, FileCheck, ClipboardList, Lightbulb, Eye, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -224,6 +224,39 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     const waLink = `https://wa.me/972${phone.startsWith('0') ? phone.substring(1) : phone}?text=${encodeURIComponent(text)}`;
     window.open(waLink, '_blank');
   };
+
+  // Clients placed under follow-up / watch.
+  const watchedClients = db.users.filter((u) => u.role === 'client' && u.isWatched);
+
+  const toggleWatch = (userId: string) => {
+    const newDb = { ...db };
+    const u = newDb.users.find((x) => x.id === userId);
+    if (!u) return;
+    if (u.isWatched) {
+      u.isWatched = false;
+      u.watchReason = '';
+    } else {
+      const reason = window.prompt('למה הלקוח נכנס למעקב? (הערה קצרה)');
+      if (reason === null) return; // cancelled
+      u.isWatched = true;
+      u.watchReason = reason;
+    }
+    setDb(newDb);
+    saveDB(newDb);
+    refreshData();
+  };
+
+  // Workload per employee (manager oversight).
+  const workload = (db.employees || []).map((emp) => {
+    const empTasks = allTasks.filter((t) => t.employeeId === emp.id);
+    return {
+      emp,
+      open: empTasks.filter((t) => !t.isDone).length,
+      done: empTasks.filter((t) => t.isDone).length,
+      total: empTasks.length,
+    };
+  });
+  const maxLoad = Math.max(1, ...workload.map((w) => w.total));
 
   // Quick-access tiles for the personal dashboard hub.
   const hubTiles = [
@@ -481,6 +514,62 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-green-50/50 border border-green-100">
                       <span className="text-sm font-medium line-through text-muted-foreground">{t.task}</span>
                       <span className="text-[10px] text-green-700 font-bold">✓ {t.assigneeName || ''}</span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Manager oversight + clients under watch */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10">
+                <CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />עומס עבודה לפי עובד</CardTitle>
+                <CardDescription>מבט מנהל: משימות פתוחות והושלמו לכל איש צוות</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {workload.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-6">אין עובדים להצגה</div>
+                ) : (
+                  workload.map(({ emp, open, done, total }) => (
+                    <div key={emp.id} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-bold">{emp.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          <b className="text-primary">{open}</b> פתוחות · <b className="text-green-600">{done}</b> הושלמו
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
+                        <div className="h-full bg-primary" style={{ width: `${(open / maxLoad) * 100}%` }} />
+                        <div className="h-full bg-green-500/70" style={{ width: `${(done / maxLoad) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-amber-50 border-b border-amber-100 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2 text-amber-800"><Eye className="h-5 w-5" />לקוחות במעקב</CardTitle>
+                  <CardDescription className="text-amber-700/80">{watchedClients.length > 0 ? `${watchedClients.length} לקוחות דורשים תשומת לב` : 'אין לקוחות במעקב'}</CardDescription>
+                </div>
+                <Button size="sm" variant="ghost" className="rounded-full text-amber-800" onClick={() => handleTabChange('clients')}>לניהול לקוחות</Button>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {watchedClients.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-6">סמן לקוח במעקב במסך "ניהול לקוחות" כדי לעקוב אחריו כאן</div>
+                ) : (
+                  watchedClients.map((u) => (
+                    <div key={u.id} className="p-3 rounded-xl bg-amber-50/50 border border-amber-100">
+                      <div className="flex items-center gap-2 font-bold text-sm">
+                        <Eye className="h-3.5 w-3.5 text-amber-600" />
+                        {u.name}
+                        {u.clientNumber && <span className="text-[10px] text-muted-foreground">#{u.clientNumber}</span>}
+                      </div>
+                      {u.watchReason && <p className="text-xs text-muted-foreground mt-1 pr-5">{u.watchReason}</p>}
                     </div>
                   ))
                 )}
@@ -924,6 +1013,11 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
                             <span>{user.name}</span>
+                            {user.isWatched && (
+                              <Badge className="text-[10px] h-4 px-1 bg-amber-500 text-white gap-1">
+                                <Eye className="h-2.5 w-2.5" />במעקב
+                              </Badge>
+                            )}
                             {user.clientNumber && (
                               <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-muted text-muted-foreground">
                                 #{user.clientNumber}
@@ -1007,6 +1101,16 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                           <Button variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setAlertMessage(`עריכת פרטי לקוח: ${user.name}\nח.פ: 512345678\nתיק ניכויים: 912345678\nמע"מ: דו-חודשי\nמס הכנסה: חודשי\nאחראי: ${user.assignedEmployee}`)}>
                             <UserCheck className="h-4 w-4" />
                             תיק לקוח
+                          </Button>
+                          <Button
+                            variant={user.isWatched ? 'default' : 'outline'}
+                            size="sm"
+                            className={cn('rounded-full gap-2', user.isWatched && 'bg-amber-500 hover:bg-amber-600 text-white')}
+                            onClick={() => toggleWatch(user.id)}
+                            title={user.isWatched ? 'הסר ממעקב' : 'הוסף למעקב'}
+                          >
+                            <Eye className="h-4 w-4" />
+                            {user.isWatched ? 'במעקב' : 'מעקב'}
                           </Button>
                           <Button variant="ghost" size="icon" className="rounded-full">
                             <MoreVertical className="h-4 w-4" />

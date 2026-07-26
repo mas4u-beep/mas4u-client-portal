@@ -60,6 +60,9 @@ export interface User {
   // Community fields
   isCommunityMember?: boolean;
   serviceArea?: string;
+  // Follow-up / watch
+  isWatched?: boolean;
+  watchReason?: string;
 }
 
 export interface Document {
