@@ -24,7 +24,7 @@ import { Calendar as CalendarIcon, CheckCircle2, AlertCircle, MessageCircle } fr
 import { cn } from '@/lib/utils';
 import { api } from './services/api';
 import { initDB, onDBChange, setCurrentActor, logActivity } from './lib/mockData';
-import { User } from './types';
+import { User, Document } from './types';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 

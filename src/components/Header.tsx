@@ -34,11 +34,29 @@ const navItems = [
   { icon: Settings, label: 'הגדרות', href: '#', active: false },
 ];
 
+// Admin/staff navigation for the mobile menu (mirrors the desktop Sidebar).
+const adminNavItems = [
+  { icon: LayoutDashboard, label: 'לוח בקרה' },
+  { icon: UserIcon, label: 'לקוחות' },
+  { icon: LayoutDashboard, label: 'תמונת מצב תיקים' },
+  { icon: FileText, label: 'מסמכים' },
+  { icon: BookOpen, label: 'דוחות שנתיים' },
+  { icon: FileText, label: 'ניהול ידע' },
+  { icon: FileText, label: 'משימות צוות' },
+  { icon: FileText, label: 'מעקב דדליינים' },
+  { icon: FileText, label: 'יומן פעילות' },
+  { icon: FileText, label: 'סיכום שבועי' },
+  { icon: MessageSquare, label: "פניות וצ'אט" },
+  { icon: Settings, label: 'הגדרות' },
+];
+
 export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: () => void; onTabChange?: (tab: string) => void }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{docs: Document[], articles: KnowledgeArticle[], clients: User[]}>({ docs: [], articles: [], clients: [] });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mobileNav = user?.role === 'admin' ? adminNavItems : navItems;
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,7 +124,7 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border/40 bg-background/80 px-4 backdrop-blur-xl sm:px-8">
       <div className="flex items-center gap-4">
-        <Sheet>
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <SheetTrigger
             render={
               <Button variant="ghost" size="icon" className="lg:hidden rounded-full hover:bg-muted/80">
@@ -121,25 +139,22 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
                 Mas4U
               </SheetTitle>
             </SheetHeader>
-            <nav className="space-y-1.5 p-4">
-              {navItems.map((item) => (
+            <nav className="space-y-1.5 p-4 overflow-y-auto max-h-[calc(100vh-8rem)]">
+              {mobileNav.map((item) => (
                 <Button
                   key={item.label}
-                  variant={item.active ? 'secondary' : 'ghost'}
-                  className={cn(
-                    "w-full justify-start gap-3 px-4 py-6 text-sm font-medium rounded-xl transition-all",
-                    item.active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
-                  )}
-                  onClick={() => onTabChange?.(item.label)}
+                  variant="ghost"
+                  className="w-full justify-start gap-3 px-4 py-6 text-sm font-medium rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                  onClick={() => { onTabChange?.(item.label); setMenuOpen(false); }}
                 >
-                  <item.icon className={cn("h-5 w-5", item.active ? "text-primary" : "text-muted-foreground/70")} />
+                  <item.icon className="h-5 w-5 text-muted-foreground/70" />
                   {item.label}
                 </Button>
               ))}
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="w-full justify-start gap-3 px-4 py-6 text-sm text-destructive font-medium rounded-xl hover:bg-destructive/10"
-                onClick={onLogout}
+                onClick={() => { setMenuOpen(false); onLogout(); }}
               >
                 <LogOut className="h-5 w-5 opacity-80" />
                 התנתקות

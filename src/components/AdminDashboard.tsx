@@ -787,15 +787,24 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.slice(0, 4).map(user => (
+                    {filteredUsers.slice(0, 5).map(user => {
+                      const missingCount = user.missingDocuments?.length || 0;
+                      return (
                       <TableRow key={user.id}>
                         <TableCell className="font-bold">{user.name}</TableCell>
-                        <TableCell>מע"מ (15/04)</TableCell>
+                        <TableCell>{user.vatFrequency ? `מע"מ (${user.vatFrequency})` : 'מע"מ'}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 text-destructive text-xs font-bold">
-                            <AlertTriangle className="h-3 w-3" />
-                            חסרים 3 מסמכים
-                          </div>
+                          {missingCount > 0 ? (
+                            <div className="flex items-center gap-2 text-destructive text-xs font-bold">
+                              <AlertTriangle className="h-3 w-3" />
+                              חסרים {missingCount} מסמכים
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-green-600 text-xs font-bold">
+                              <CheckCircle className="h-3 w-3" />
+                              עדכני
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Button size="sm" variant="ghost" className="text-primary gap-2" onClick={() => openWhatsAppReminder(user, 'ongoing')}>
@@ -804,7 +813,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -1253,7 +1262,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                             <Upload className="h-4 w-4" />
                             העלאת מסמך
                           </Button>
-                          <Button variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setAlertMessage(`עריכת פרטי לקוח: ${user.name}\nח.פ: 512345678\nתיק ניכויים: 912345678\nמע"מ: דו-חודשי\nמס הכנסה: חודשי\nאחראי: ${user.assignedEmployee}`)}>
+                          <Button variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setAlertMessage(`תיק לקוח: ${user.name}\nמספר לקוח: ${user.clientNumber || '—'}\nח.פ/ת"ז: ${user.companyId || user.idNumber || '—'}\nתיק ניכויים: ${user.deductionsId || '—'}\nמע"מ: ${user.vatFrequency || '—'}\nמס הכנסה: ${user.incomeTaxFrequency || '—'}\nטלפון: ${user.phone || '—'}\nאחראי: ${user.assignedEmployee || '—'}`)}>
                             <UserCheck className="h-4 w-4" />
                             תיק לקוח
                           </Button>

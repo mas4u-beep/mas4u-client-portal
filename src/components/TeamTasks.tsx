@@ -235,7 +235,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div className="space-y-2">
             <label className="text-xs font-bold text-muted-foreground">עובד מבצע</label>
-            <Select value={selectedEmployeeForNewTask} onValueChange={setSelectedEmployeeForNewTask}>
+            <Select value={selectedEmployeeForNewTask} onValueChange={setSelectedEmployeeForNewTask} items={Object.fromEntries(employees.map((e) => [e.id, e.name]))}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="בחר עובד..." /></SelectTrigger>
               <SelectContent>
                 {employees.map((emp) => (<SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>))}
@@ -244,7 +244,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-muted-foreground">עדיפות</label>
-            <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as 'high' | 'medium' | 'low')}>
+            <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as 'high' | 'medium' | 'low')} items={{ high: 'דחוף', medium: 'רגיל', low: 'עדיפות נמוכה' }}>
               <SelectTrigger className="h-10 rounded-full"><SelectValue placeholder="עדיפות..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="high">דחוף</SelectItem>
