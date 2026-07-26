@@ -145,39 +145,132 @@ const INITIAL_DB: DB = {
   ]
 };
 
-export const getDB = (): DB => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DB));
-    return INITIAL_DB;
-  }
+// ---------------------------------------------------------------------------
+// Shared, real-time database layer.
+//
+// The whole DB lives as a single JSON row in Supabase so every user in the
+// office shares one source of truth. To avoid rewriting every component, the
+// public getDB()/saveDB() API stays SYNCHRONOUS and works against an in-memory
+// cache. On startup initDB() hydrates that cache from Supabase (seeding it on
+// first run), and a realtime subscription keeps it fresh when someone else
+// makes a change. If Supabase is not configured, everything falls back to
+// browser localStorage exactly as before.
+// ---------------------------------------------------------------------------
 
-  let parsed: Partial<DB>;
+import { supabase, APP_STATE_TABLE, APP_STATE_ID } from './supabaseClient';
+
+const DB_CHANGED_EVENT = 'mas4u-db-changed';
+
+// Fill in any missing top-level arrays so old/partial data never crashes filters.
+const normalize = (parsed: Partial<DB> | null | undefined): DB => ({
+  ...INITIAL_DB,
+  ...(parsed || {}),
+  users: parsed?.users || INITIAL_DB.users,
+  documents: parsed?.documents || INITIAL_DB.documents,
+  messages: parsed?.messages || INITIAL_DB.messages,
+  notifications: parsed?.notifications || INITIAL_DB.notifications,
+  knowledgeBase: parsed?.knowledgeBase || INITIAL_DB.knowledgeBase,
+  timeline: parsed?.timeline || INITIAL_DB.timeline,
+  appointments: parsed?.appointments || INITIAL_DB.appointments,
+  employees: parsed?.employees || INITIAL_DB.employees,
+  teamTasks: parsed?.teamTasks || INITIAL_DB.teamTasks,
+});
+
+const readLocal = (): DB => {
   try {
-    parsed = JSON.parse(data);
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data) return normalize(INITIAL_DB);
+    return normalize(JSON.parse(data));
   } catch (error) {
     console.error('Corrupted local database detected, resetting to defaults:', error);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DB));
-    return INITIAL_DB;
+    return normalize(INITIAL_DB);
   }
-
-  // Ensure all arrays exist to prevent "filter of undefined" errors on old data
-  return {
-    ...INITIAL_DB,
-    ...parsed,
-    users: parsed.users || INITIAL_DB.users,
-    documents: parsed.documents || INITIAL_DB.documents,
-    messages: parsed.messages || INITIAL_DB.messages,
-    notifications: parsed.notifications || INITIAL_DB.notifications,
-    knowledgeBase: parsed.knowledgeBase || INITIAL_DB.knowledgeBase,
-    timeline: parsed.timeline || INITIAL_DB.timeline,
-    appointments: parsed.appointments || INITIAL_DB.appointments,
-    employees: parsed.employees || INITIAL_DB.employees,
-    teamTasks: parsed.teamTasks || INITIAL_DB.teamTasks,
-  };
 };
+
+// In-memory cache — the synchronous source of truth for the running app.
+let _cache: DB = readLocal();
+
+export const getDB = (): DB => _cache;
+
 export const saveDB = (db: DB) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  _cache = normalize(db);
+  const json = JSON.stringify(_cache);
+  try { localStorage.setItem(STORAGE_KEY, json); } catch { /* ignore quota errors */ }
+
+  if (supabase) {
+    // Fire-and-forget push of the full shared state. Last write wins.
+    supabase
+      .from(APP_STATE_TABLE)
+      .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() })
+      .then(({ error }) => {
+        if (error) console.error('Supabase saveDB failed:', error.message);
+      });
+  }
+};
+
+let _realtimeStarted = false;
+const startRealtime = () => {
+  if (!supabase || _realtimeStarted) return;
+  _realtimeStarted = true;
+  supabase
+    .channel('app_state_changes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: APP_STATE_TABLE, filter: `id=eq.${APP_STATE_ID}` },
+      (payload: any) => {
+        const incoming = payload?.new?.data;
+        if (!incoming) return;
+        const incomingJson = JSON.stringify(incoming);
+        // Ignore the echo of our own write.
+        if (incomingJson === JSON.stringify(_cache)) return;
+        _cache = normalize(incoming);
+        try { localStorage.setItem(STORAGE_KEY, incomingJson); } catch { /* ignore */ }
+        window.dispatchEvent(new CustomEvent(DB_CHANGED_EVENT));
+      }
+    )
+    .subscribe();
+};
+
+/**
+ * Hydrate the shared database from Supabase (seeding it on first run) and start
+ * listening for live changes. Safe to call once at app startup. Resolves even
+ * on failure, having fallen back to localStorage.
+ */
+export const initDB = async (): Promise<void> => {
+  if (!supabase) {
+    _cache = readLocal();
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from(APP_STATE_TABLE)
+      .select('data')
+      .eq('id', APP_STATE_ID)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (data && data.data) {
+      _cache = normalize(data.data);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache)); } catch { /* ignore */ }
+    } else {
+      // First run: seed the shared row from whatever we have locally (or defaults).
+      _cache = readLocal();
+      const { error: seedError } = await supabase
+        .from(APP_STATE_TABLE)
+        .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() });
+      if (seedError) throw seedError;
+    }
+    startRealtime();
+  } catch (e: any) {
+    console.error('Supabase init failed, using local storage only:', e?.message || e);
+    _cache = readLocal();
+  }
+};
+
+/** Subscribe to live changes made by other users. Returns an unsubscribe fn. */
+export const onDBChange = (callback: () => void): (() => void) => {
+  window.addEventListener(DB_CHANGED_EVENT, callback);
+  return () => window.removeEventListener(DB_CHANGED_EVENT, callback);
 };
 
 export const addUser = (user: User) => {

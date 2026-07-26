@@ -23,20 +23,36 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon, CheckCircle2, AlertCircle, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from './services/api';
+import { initDB, onDBChange } from './lib/mockData';
 import { User } from './types';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('דאשבורד');
   const [db, setDb] = useState<any>(null);
+  const [dbReady, setDbReady] = useState(false);
+  // Bumped whenever another user changes the shared database (realtime),
+  // forcing dependent views to re-read the latest data.
+  const [syncTick, setSyncTick] = useState(0);
 
   const taxCalendar = [
     { date: '15/04', title: 'דיווח מע"מ דו-חודשי', type: 'urgent' },
     { date: '30/04', title: 'מקדמות מס הכנסה', type: 'normal' },
     { date: '15/05', title: 'דיווח ניכויים', type: 'normal' },
   ];
+
+  // Connect to the shared database (Supabase) and listen for live updates.
+  useEffect(() => {
+    let off = () => {};
+    initDB().finally(() => {
+      setDbReady(true);
+      off = onDBChange(() => setSyncTick((t) => t + 1));
+    });
+    return () => off();
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('mas4u_user');
@@ -70,7 +86,7 @@ export default function App() {
     };
     loadInitialData();
     return () => { isCancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, syncTick]);
 
   const handleLogin = (userData: User) => {
     setUser(userData);
@@ -88,6 +104,15 @@ export default function App() {
     toast.info('התנתקת מהמערכת.');
   };
 
+  if (!dbReady) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">מתחבר למסד הנתונים המשותף…</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <Auth onLogin={handleLogin} />;
   }
@@ -104,7 +129,7 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           {user?.role === 'admin' ? (
-            <AdminDashboard activeTab={activeTab} onTabChange={setActiveTab} />
+            <AdminDashboard key={syncTick} activeTab={activeTab} onTabChange={setActiveTab} />
           ) : (
             <>
               {activeTab === 'דאשבורד' && <Dashboard user={user} onTabChange={setActiveTab} />}
