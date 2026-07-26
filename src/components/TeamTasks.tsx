@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CheckCircle, Plus, Trash2, User as UserIcon, Bell, ArrowLeftRight, UserPlus, KeyRound, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Employee, TeamTask, DB, User } from '@/src/types';
+import { Employee, TeamTask, DB, User, Notification } from '@/src/types';
 import { toast } from 'sonner';
 
 interface TeamTasksProps {
@@ -80,17 +80,40 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
 
   const toggleTaskStatus = (taskId: string) => {
     const now = new Date().toISOString();
+    let notif: Notification | null = null;
     const newTasks = tasks.map((t) => {
       if (t.id !== taskId) return t;
       const done = !t.isDone;
-      if (done) toast.success(`המשימה "${t.task}" הושלמה!`);
+      if (done) {
+        toast.success(`המשימה "${t.task}" הושלמה!`);
+        // Notify whoever assigned the task (unless they completed it themselves).
+        if (t.assignedByName && t.assignedByName !== myName) {
+          const assigner = db.users.find((u) => u.name === t.assignedByName);
+          if (assigner) {
+            notif = {
+              id: `n-${Date.now()}`,
+              userId: assigner.id,
+              title: 'משימה בוצעה ✓',
+              message: `${myName} השלים/ה את המשימה: "${t.task}"`,
+              timestamp: now,
+              isRead: false,
+              type: 'success',
+            };
+          }
+        }
+      }
       return {
         ...t,
         isDone: done,
         activity: [...(t.activity || []), { text: done ? `הושלמה ע"י ${myName}` : `הוחזרה לפתוחה ע"י ${myName}`, at: now }],
       };
     });
-    commit({ ...db, teamTasks: newTasks });
+    const newDb: DB = {
+      ...db,
+      teamTasks: newTasks,
+      notifications: notif ? [...(db.notifications || []), notif] : db.notifications,
+    };
+    commit(newDb);
   };
 
   const deleteTask = (taskId: string) => {

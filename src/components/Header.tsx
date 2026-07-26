@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import { useEffect, useState, useRef } from 'react';
 import { api } from '@/src/services/api';
+import { onDBChange } from '@/src/lib/mockData';
 import { Notification, Document, KnowledgeArticle } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -41,9 +42,12 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user?.id) {
-      api.getNotifications(user.id).then(setNotifications);
-    }
+    if (!user?.id) return;
+    const load = () => api.getNotifications(user.id).then(setNotifications);
+    load();
+    // Refresh live when the shared database changes (e.g. a task you assigned was completed).
+    const off = onDBChange(load);
+    return off;
   }, [user?.id]);
 
   useEffect(() => {

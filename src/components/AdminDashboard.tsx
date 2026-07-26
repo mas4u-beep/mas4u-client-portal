@@ -1,4 +1,4 @@
-import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot } from 'lucide-react';
+import { Users, FileText, MessageSquare, Search, Download, CheckCircle, XCircle, Clock, Tag, StickyNote, UserCheck, TrendingUp, AlertTriangle, Send, Filter, MoreVertical, Bell, Upload, Phone, Video, Camera, Plus, Bot, FileCheck, ClipboardList, Lightbulb } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +193,48 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
   const pendingDocs = db.documents.filter(d => d.status === 'pending');
   const unreadMessages = db.messages.filter(m => !m.isRead);
 
+  // Personalized data for the logged-in staff member (dashboard hub).
+  const myEmployee = (db.employees || []).find(e =>
+    (currentUser?.email && e.email && e.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+    (currentUser?.name && e.name === currentUser.name)
+  );
+  const firstName = (currentUser?.name || '').split(' ')[0] || 'שלום';
+  const allTasks = db.teamTasks || [];
+  const myOpenTasks = allTasks.filter(t => myEmployee && t.employeeId === myEmployee.id && !t.isDone);
+  const completedIAssigned = allTasks.filter(t => t.assignedByName === currentUser?.name && t.isDone);
+
+  // Build a WhatsApp reminder link for a client's missing documents.
+  const openWhatsAppReminder = (u: any, kind: 'annual' | 'ongoing') => {
+    if (!u.phone) { setAlertMessage('לא הוזן מספר טלפון ללקוח זה.'); return; }
+    let items: string[] = [];
+    if (kind === 'annual') {
+      const d = u.annualReportDocs || {};
+      if (d.form106 === 'חסר') items.push('טופס 106');
+      if (d.form106Spouse === 'חסר') items.push('טופס 106 בן/ת זוג');
+      if (d.studyFund === 'חסר') items.push('אישורי קרן השתלמות');
+      if (d.form867 === 'חסר') items.push('טופס 867');
+      if (d.allowances === 'חסר') items.push('אישורי קצבאות');
+    } else {
+      items = (u.missingDocuments || []).map((m: any) => m.name);
+    }
+    const list = items.length ? items.join(', ') : 'המסמכים החסרים';
+    const purpose = kind === 'annual' ? 'הכנת הדוח השנתי' : 'הדיווח השוטף';
+    const text = `שלום ${u.firstName || u.name}, חסרים לנו המסמכים הבאים לצורך ${purpose}: ${list}. נודה להשלמתם בהקדם. תודה, משרד Mas4U`;
+    const phone = String(u.phone).replace(/\D/g, '');
+    const waLink = `https://wa.me/972${phone.startsWith('0') ? phone.substring(1) : phone}?text=${encodeURIComponent(text)}`;
+    window.open(waLink, '_blank');
+  };
+
+  // Quick-access tiles for the personal dashboard hub.
+  const hubTiles = [
+    { key: 'clients', label: 'לקוחות', icon: Users },
+    { key: 'documents', label: 'מסמכים', icon: FileText },
+    { key: 'annual', label: 'דוחות שנתיים', icon: FileCheck },
+    { key: 'tasks', label: 'משימות צוות', icon: ClipboardList },
+    { key: 'kb', label: 'ניהול ידע', icon: Lightbulb },
+    { key: 'messages', label: "פניות וצ'אט", icon: MessageSquare },
+  ];
+
   return (
     <div className="flex flex-col gap-8 p-4 sm:p-8 lg:p-10 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
       <AnimatePresence>
@@ -247,8 +289,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
 
       <header className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-primary">מרכז ניהול Mas4U</h1>
-          <p className="text-muted-foreground mt-1">ניהול חכם של לקוחות, מסמכים ותהליכי עבודה</p>
+          <h1 className="text-4xl font-black tracking-tight text-primary">שלום {firstName} 👋</h1>
+          <p className="text-muted-foreground mt-1">מרכז ניהול Mas4U — לקוחות, מסמכים ותהליכי עבודה</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="rounded-full gap-2" onClick={() => setAlertMessage('מתחבר לסורק המשרדי...')} >
@@ -384,6 +426,68 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         </div>
 
         <TabsContent value="overview" className="space-y-8">
+          {/* Personal hub — quick access to everything */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {hubTiles.map((tile) => (
+              <button
+                key={tile.key}
+                onClick={() => handleTabChange(tile.key)}
+                className="group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-border/50 bg-card/50 hover:bg-primary/5 hover:border-primary/30 transition-all"
+              >
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <tile.icon className="h-5 w-5" />
+                </div>
+                <span className="text-sm font-bold">{tile.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* My work: open tasks + tasks I assigned that were completed */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" />המשימות שלי</CardTitle>
+                  <CardDescription>{myOpenTasks.length > 0 ? `${myOpenTasks.length} משימות פתוחות` : 'אין משימות פתוחות'}</CardDescription>
+                </div>
+                <Button size="sm" variant="ghost" className="rounded-full text-primary" onClick={() => handleTabChange('tasks')}>לכל המשימות</Button>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {myOpenTasks.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-6">כל הכבוד! אין משימות פתוחות כרגע 🎉</div>
+                ) : (
+                  myOpenTasks.slice(0, 5).map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-primary/10">
+                      <span className="text-sm font-medium">{t.task}</span>
+                      <span className={cn('text-[10px] font-bold', t.priority === 'high' ? 'text-red-500' : t.priority === 'medium' ? 'text-orange-500' : 'text-blue-500')}>
+                        {t.priority === 'high' ? 'דחוף' : t.priority === 'medium' ? 'רגיל' : 'נמוך'}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-green-50 border-b border-green-100">
+                <CardTitle className="text-lg flex items-center gap-2 text-green-800"><CheckCircle className="h-5 w-5" />משימות שהקצית — בוצעו</CardTitle>
+                <CardDescription className="text-green-700/80">{completedIAssigned.length > 0 ? `${completedIAssigned.length} משימות שהעברת הושלמו` : 'אין עדיין משימות שבוצעו'}</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {completedIAssigned.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-6">משימות שתעביר לעובדים יופיעו כאן כשיסמנו שביצעו</div>
+                ) : (
+                  completedIAssigned.slice(0, 5).map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-green-50/50 border border-green-100">
+                      <span className="text-sm font-medium line-through text-muted-foreground">{t.task}</span>
+                      <span className="text-[10px] text-green-700 font-bold">✓ {t.assigneeName || ''}</span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           {pendingUsers.length > 0 && (
             <Card className="border-amber-200 shadow-sm bg-amber-50/50">
               <CardHeader className="pb-2">
@@ -450,7 +554,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button size="sm" variant="ghost" className="text-primary gap-2">
+                          <Button size="sm" variant="ghost" className="text-primary gap-2" onClick={() => openWhatsAppReminder(user, 'ongoing')}>
                             <Send className="h-3 w-3" />
                             שלח תזכורת
                           </Button>
