@@ -325,6 +325,22 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
 
   const activityLog = [...(db.activityLog || [])].reverse(); // newest first
 
+  // Export a full backup of the shared database to a JSON file (peace of mind).
+  const exportBackup = () => {
+    try {
+      const blob = new Blob([JSON.stringify(getDB(), null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mas4u-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logActivity('ייצא גיבוי נתונים');
+    } catch (e) {
+      setAlertMessage('אירעה שגיאה בייצוא הגיבוי.');
+    }
+  };
+
   // ---- Client pipeline (kanban) ----
   const PIPELINE_STAGES: { key: NonNullable<User['annualReportStatus']>; label: string; color: string }[] = [
     { key: 'not_started', label: 'טרם התחיל', color: 'bg-gray-400' },
@@ -1477,6 +1493,13 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                   <Textarea value={newTemplate.text} onChange={(e) => setNewTemplate({ ...newTemplate, text: e.target.value })} placeholder="תוכן ההודעה (אפשר {name})" className="md:col-span-2 min-h-[44px] rounded-xl text-sm" />
                 </div>
                 <Button onClick={addTemplate} className="rounded-full gap-2"><Plus className="h-4 w-4" />הוסף תבנית</Button>
+              </div>
+
+              {/* Backup */}
+              <div className="space-y-2 pt-4 border-t">
+                <h3 className="text-sm font-bold flex items-center gap-2"><Download className="h-4 w-4 text-primary" />גיבוי נתונים</h3>
+                <p className="text-xs text-muted-foreground">הורדת עותק של כל נתוני המערכת לקובץ, לשמירה ליתר ביטחון.</p>
+                <Button variant="outline" onClick={exportBackup} className="rounded-full gap-2"><Download className="h-4 w-4" />ייצוא גיבוי (JSON)</Button>
               </div>
             </CardContent>
           </Card>
