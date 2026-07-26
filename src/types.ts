@@ -136,15 +136,25 @@ export interface Employee {
   name: string;
   role: 'manager' | 'employee';
   avatar?: string;
+  email?: string;   // login email (staff sign in on the office/admin side)
+  code?: string;    // personal login code
+}
+
+export interface TeamTaskActivity {
+  text: string;
+  at: string;
 }
 
 export interface TeamTask {
   id: string;
-  employeeId: string;
+  employeeId: string;          // current assignee
   task: string;
   priority: 'high' | 'medium' | 'low';
   isDone: boolean;
   createdAt: string;
+  assignedByName?: string;     // who created / last assigned the task
+  assigneeName?: string;       // denormalized assignee name for display
+  activity?: TeamTaskActivity[]; // hand-off / status trail
 }
 
 export interface DB {

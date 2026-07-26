@@ -129,7 +129,7 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           {user?.role === 'admin' ? (
-            <AdminDashboard key={syncTick} activeTab={activeTab} onTabChange={setActiveTab} />
+            <AdminDashboard key={syncTick} activeTab={activeTab} onTabChange={setActiveTab} currentUser={user} />
           ) : (
             <>
               {activeTab === 'דאשבורד' && <Dashboard user={user} onTabChange={setActiveTab} />}

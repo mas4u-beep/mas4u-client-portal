@@ -187,8 +187,57 @@ const readLocal = (): DB => {
   }
 };
 
+// Default login details for the pre-seeded staff members. Every employee needs
+// a login account (role 'admin') so they can sign in on the office side.
+const STAFF_LOGIN_SEED: Record<string, { email: string; code: string }> = {
+  'אלמוג': { email: 'almog@mas4u.co.il', code: '4001' },
+  'נדיה': { email: 'nadia@mas4u.co.il', code: '4002' },
+  'מיכל': { email: 'michal@mas4u.co.il', code: '4003' },
+  'דורית': { email: 'dorit@mas4u.co.il', code: '4004' },
+  'נימרוד': { email: 'nimrod@mas4u.co.il', code: '4005' },
+};
+
+/**
+ * Make sure every staff member (employees list) has a matching login account
+ * so they can sign in on the office/admin side. Self-heals existing data.
+ * Returns true if anything was added/changed (so the caller can persist).
+ */
+const ensureStaffAccounts = (db: DB): boolean => {
+  let changed = false;
+  (db.employees || []).forEach((emp, idx) => {
+    if (!emp.email) {
+      emp.email = STAFF_LOGIN_SEED[emp.name]?.email || `staff${idx + 1}@mas4u.co.il`;
+      changed = true;
+    }
+    if (!emp.code) {
+      emp.code = STAFF_LOGIN_SEED[emp.name]?.code || String(4001 + idx);
+      changed = true;
+    }
+    const existing = db.users.find(
+      (u) => u.email && u.email.toLowerCase() === emp.email!.toLowerCase()
+    );
+    if (existing) {
+      if (existing.role !== 'admin') { existing.role = 'admin'; changed = true; }
+      if (existing.personalCode !== emp.code) { existing.personalCode = emp.code; changed = true; }
+    } else {
+      db.users.push({
+        id: `staff-${emp.id}`,
+        name: emp.name,
+        email: emp.email!,
+        role: 'admin',
+        personalCode: emp.code,
+        status: 'active',
+        lastUpdate: new Date().toISOString(),
+      } as User);
+      changed = true;
+    }
+  });
+  return changed;
+};
+
 // In-memory cache — the synchronous source of truth for the running app.
 let _cache: DB = readLocal();
+ensureStaffAccounts(_cache);
 
 export const getDB = (): DB => _cache;
 
@@ -239,6 +288,7 @@ const startRealtime = () => {
 export const initDB = async (): Promise<void> => {
   if (!supabase) {
     _cache = readLocal();
+    ensureStaffAccounts(_cache);
     return;
   }
   try {
@@ -251,10 +301,18 @@ export const initDB = async (): Promise<void> => {
 
     if (data && data.data) {
       _cache = normalize(data.data);
+      // Self-heal: make sure staff login accounts exist, then persist if changed.
+      const migrated = ensureStaffAccounts(_cache);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache)); } catch { /* ignore */ }
+      if (migrated) {
+        await supabase
+          .from(APP_STATE_TABLE)
+          .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() });
+      }
     } else {
       // First run: seed the shared row from whatever we have locally (or defaults).
       _cache = readLocal();
+      ensureStaffAccounts(_cache);
       const { error: seedError } = await supabase
         .from(APP_STATE_TABLE)
         .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() });
@@ -264,6 +322,7 @@ export const initDB = async (): Promise<void> => {
   } catch (e: any) {
     console.error('Supabase init failed, using local storage only:', e?.message || e);
     _cache = readLocal();
+    ensureStaffAccounts(_cache);
   }
 };
 

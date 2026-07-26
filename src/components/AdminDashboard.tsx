@@ -18,7 +18,7 @@ import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { TeamTasks } from './TeamTasks';
 
-export function AdminDashboard({ activeTab: externalTab, onTabChange }: { activeTab?: string; onTabChange?: (tab: string) => void }) {
+export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUser }: { activeTab?: string; onTabChange?: (tab: string) => void; currentUser?: User | null }) {
   const [db, setDb] = useState(getDB());
   const [searchTerm, setSearchTerm] = useState('');
   const [internalTab, setInternalTab] = useState('overview');
@@ -985,7 +985,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange }: { active
         </TabsContent>
 
         <TabsContent value="tasks">
-          <TeamTasks db={db} setDb={(newDb) => { setDb(newDb); saveDB(newDb); }} saveDB={saveDB} />
+          <TeamTasks db={db} setDb={(newDb) => { setDb(newDb); saveDB(newDb); }} saveDB={saveDB} currentUser={currentUser} />
         </TabsContent>
         <TabsContent value="kb">
           <Card className="border-none shadow-sm">
