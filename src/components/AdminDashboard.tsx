@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { TeamTasks } from './TeamTasks';
 import { ClientProfile } from './ClientProfile';
 import { DataTables } from './DataTables';
+import { TableClients } from './TableClients';
 
 export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUser }: { activeTab?: string; onTabChange?: (tab: string) => void; currentUser?: User | null }) {
   const [db, setDb] = useState(getDB());
@@ -1171,7 +1172,8 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         </TabsContent>
 
         <TabsContent value="clients">
-          {openClientId && db.users.find((u) => u.id === openClientId) ? (
+          <TableClients currentUser={currentUser} />
+          {false && (openClientId && db.users.find((u) => u.id === openClientId) ? (
             <ClientProfile
               client={db.users.find((u) => u.id === openClientId)!}
               db={db}
@@ -1359,7 +1361,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
               </Table>
             </CardContent>
           </Card>
-          )}
+          ))}
         </TabsContent>
 
         <TabsContent value="messages">

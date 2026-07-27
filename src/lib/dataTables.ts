@@ -132,6 +132,25 @@ export async function deleteRow(rowId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Find the "ID number" (ת"ז) column of a table, if any. */
+export function findIdColumn(columns: TableColumn[]): TableColumn | null {
+  const c = columns.find((x) => /ת"?ז|ת\.ז|תעודת זהות/.test(x.label) || x.label === 'ם' || x.label.includes('ח.פ'));
+  return c || null;
+}
+
+/** Fetch rows of a table whose given jsonb column equals a value. */
+export async function findRowsByValue(tableId: string, colKey: string, value: string): Promise<DataRow[]> {
+  if (!value) return [];
+  const { data, error } = await ready()
+    .from('data_rows')
+    .select('id,table_id,data,position,updated_at')
+    .eq('table_id', tableId)
+    .eq(`data->>${colKey}`, value)
+    .limit(50);
+  if (error) throw error;
+  return (data || []) as DataRow[];
+}
+
 /** Subscribe to live row changes for a table. Returns an unsubscribe fn. */
 export function subscribeRows(tableId: string, cb: () => void): () => void {
   const client = supabase;
