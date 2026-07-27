@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronRight, Search, Loader2, User as UserIcon, Users, Phone, Hash, FileText, Wallet, Database } from 'lucide-react';
+import { ChevronRight, Search, Loader2, User as UserIcon, Users, Phone, Hash, FileText, Wallet, Database, ClipboardCheck, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -133,6 +133,42 @@ export function TableClients({ currentUser }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Case status overview — the key statuses at a glance */}
+        {(() => {
+          const statusCols = source.columns.filter((c) => statusKind(c.label));
+          if (statusCols.length === 0) return null;
+          return (
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10">
+                <CardTitle className="text-lg flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-primary" />מצב התיק</CardTitle>
+                <CardDescription>סטטוס הדוח, החתימה, המסמכים והתשלום — במבט אחד.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4">
+                <div className="flex flex-wrap gap-2">
+                  {statusCols.map((c) => {
+                    const val = String(openClient.data[c.key] ?? '').trim();
+                    const kind = statusKind(c.label);
+                    if (kind === 'flag') {
+                      return (
+                        <div key={c.key} className={cn('px-3 py-2 rounded-xl border text-sm flex items-center gap-2', val ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-green-50 border-green-200 text-green-700')}>
+                          {val ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                          <span className="font-bold">{c.label}:</span>{val || 'אין'}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={c.key} className={cn('px-3 py-2 rounded-xl border text-sm flex items-center gap-2', val ? 'bg-green-50 border-green-200 text-green-700' : 'bg-muted/40 border-border/50 text-muted-foreground')}>
+                        {val ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                        <span className="font-bold">{c.label}:</span>{val || 'טרם'}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Full details from source table (editable) */}
         <Card className="border-none shadow-sm">
