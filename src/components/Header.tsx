@@ -39,6 +39,7 @@ const adminNavItems = [
   { icon: LayoutDashboard, label: 'לוח בקרה' },
   { icon: UserIcon, label: 'לקוחות' },
   { icon: LayoutDashboard, label: 'תמונת מצב תיקים' },
+  { icon: FileText, label: 'טבלאות' },
   { icon: FileText, label: 'מסמכים' },
   { icon: BookOpen, label: 'דוחות שנתיים' },
   { icon: FileText, label: 'ניהול ידע' },

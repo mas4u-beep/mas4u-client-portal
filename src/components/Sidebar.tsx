@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock, LayoutGrid, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock, LayoutGrid, TrendingUp, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -24,6 +24,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
         { icon: LayoutDashboard, label: 'לוח בקרה', href: '#', active: activeTab === 'לוח בקרה' },
         { icon: Users, label: 'לקוחות', href: '#', active: activeTab === 'לקוחות' },
         { icon: LayoutGrid, label: 'תמונת מצב תיקים', href: '#', active: activeTab === 'תמונת מצב תיקים' },
+        { icon: Database, label: 'טבלאות', href: '#', active: activeTab === 'טבלאות' },
         { icon: FileText, label: 'מסמכים', href: '#', active: activeTab === 'מסמכים' },
         { icon: BookOpen, label: 'דוחות שנתיים', href: '#', active: activeTab === 'דוחות שנתיים' },
         { icon: Bot, label: 'אוטומציות וסוכנים', href: '#', active: activeTab === 'אוטומציות וסוכנים' },

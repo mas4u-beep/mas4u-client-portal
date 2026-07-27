@@ -19,6 +19,7 @@ import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { TeamTasks } from './TeamTasks';
 import { ClientProfile } from './ClientProfile';
+import { DataTables } from './DataTables';
 
 export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUser }: { activeTab?: string; onTabChange?: (tab: string) => void; currentUser?: User | null }) {
   const [db, setDb] = useState(getDB());
@@ -38,6 +39,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     externalTab === 'מעקב דדליינים' ? 'deadlines' :
     externalTab === 'תמונת מצב תיקים' ? 'pipeline' :
     externalTab === 'סיכום שבועי' ? 'weekly' :
+    externalTab === 'טבלאות' ? 'tables' :
     externalTab === 'הגדרות' ? 'settings' : 'overview'
   ) : internalTab;
 
@@ -56,6 +58,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         val === 'deadlines' ? 'מעקב דדליינים' :
         val === 'pipeline' ? 'תמונת מצב תיקים' :
         val === 'weekly' ? 'סיכום שבועי' :
+        val === 'tables' ? 'טבלאות' :
         val === 'settings' ? 'הגדרות' : 'לוח בקרה';
       onTabChange(label);
     } else {
@@ -1549,6 +1552,11 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Data tables */}
+        <TabsContent value="tables">
+          <DataTables currentUser={currentUser} />
         </TabsContent>
 
         {/* Client pipeline (kanban) */}
