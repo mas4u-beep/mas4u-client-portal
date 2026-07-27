@@ -18,6 +18,7 @@ import { User, Document, EmployeeName } from '@/src/types';
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { TeamTasks } from './TeamTasks';
+import { ClientProfile } from './ClientProfile';
 
 export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUser }: { activeTab?: string; onTabChange?: (tab: string) => void; currentUser?: User | null }) {
   const [db, setDb] = useState(getDB());
@@ -75,6 +76,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
   });
 
   const [newDeadline, setNewDeadline] = useState({ title: '', date: '', clientName: '', note: '' });
+  const [openClientId, setOpenClientId] = useState<string | null>(null);
 
   const refreshData = () => {
     setDb(getDB());
@@ -1146,6 +1148,16 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         </TabsContent>
 
         <TabsContent value="clients">
+          {openClientId && db.users.find((u) => u.id === openClientId) ? (
+            <ClientProfile
+              client={db.users.find((u) => u.id === openClientId)!}
+              db={db}
+              templates={templates}
+              onBack={() => setOpenClientId(null)}
+              onToggleWatch={toggleWatch}
+              onSendTemplate={sendTemplateWhatsApp}
+            />
+          ) : (
           <Card className="border-none shadow-sm">
             <CardHeader className="bg-primary/5 border-b border-primary/10">
               <div className="flex items-center justify-between">
@@ -1278,7 +1290,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                             <Upload className="h-4 w-4" />
                             העלאת מסמך
                           </Button>
-                          <Button variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setAlertMessage(`תיק לקוח: ${user.name}\nמספר לקוח: ${user.clientNumber || '—'}\nח.פ/ת"ז: ${user.companyId || user.idNumber || '—'}\nתיק ניכויים: ${user.deductionsId || '—'}\nמע"מ: ${user.vatFrequency || '—'}\nמס הכנסה: ${user.incomeTaxFrequency || '—'}\nטלפון: ${user.phone || '—'}\nאחראי: ${user.assignedEmployee || '—'}`)}>
+                          <Button variant="outline" size="sm" className="rounded-full gap-2" onClick={() => setOpenClientId(user.id)}>
                             <UserCheck className="h-4 w-4" />
                             תיק לקוח
                           </Button>
@@ -1324,8 +1336,9 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
               </Table>
             </CardContent>
           </Card>
+          )}
         </TabsContent>
-        
+
         <TabsContent value="messages">
           <div className="grid gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-1 border-none shadow-sm h-[600px] flex flex-col">
