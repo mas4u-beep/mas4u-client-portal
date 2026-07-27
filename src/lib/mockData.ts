@@ -271,11 +271,16 @@ export const saveDB = (db: DB) => {
   }
 };
 
-let _realtimeStarted = false;
+let _channel: any = null;
 const startRealtime = () => {
-  if (!supabase || _realtimeStarted) return;
-  _realtimeStarted = true;
-  supabase
+  if (!supabase) return;
+  // Re-subscribe cleanly (e.g. after an auth session is established) so realtime
+  // works both before and after the database is locked to authenticated users.
+  if (_channel) {
+    try { supabase.removeChannel(_channel); } catch { /* ignore */ }
+    _channel = null;
+  }
+  _channel = supabase
     .channel('app_state_changes')
     .on(
       'postgres_changes',

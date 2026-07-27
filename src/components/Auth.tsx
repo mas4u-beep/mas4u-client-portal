@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { AlertCircle, Lock, User as UserIcon, Mail, Key, CheckCircle2, MessageCircle, Send, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '@/src/services/api';
+import { signIn } from '@/src/lib/auth';
+import { initDB, getDB } from '@/src/lib/mockData';
+import { supabase } from '@/src/lib/supabaseClient';
 import { User } from '@/src/types';
 import { toast } from 'sonner';
 
@@ -78,7 +81,34 @@ export function Auth({ onLogin }: AuthProps) {
 
     setIsLoading(true);
     try {
-      const user = await api.login(loginEmail, loginCode);
+      const email = loginEmail.trim().toLowerCase();
+
+      // 1) Preferred: secure Supabase Auth (email + password).
+      if (supabase) {
+        const res = await signIn(email, loginCode);
+        if (res.ok) {
+          // Re-load the shared data now that we have an authenticated session
+          // (required once the database is locked to authenticated users).
+          await initDB();
+          const profile = (getDB().users || []).find(
+            (u) => u.email && u.email.toLowerCase() === email
+          );
+          if (!profile) {
+            setError('התחברת, אך לא נמצא פרופיל משתמש מתאים במערכת. פנה למנהל.');
+          } else if (profile.status === 'pending') {
+            setError('חשבונך ממתין לאישור מנהל. לא ניתן להתחבר כרגע.');
+          } else {
+            onLogin(profile);
+          }
+          setIsLoading(false);
+          return;
+        }
+        // If Supabase Auth failed, fall through to the legacy login below
+        // (safety net during the transition, before the database is locked).
+      }
+
+      // 2) Legacy fallback: email + personal code (works until the DB is locked).
+      const user = await api.login(email, loginCode);
       if (user) {
         if (user.status === 'pending') {
           setError('חשבונך ממתין לאישור מנהל. לא ניתן להתחבר כרגע.');
@@ -86,7 +116,7 @@ export function Auth({ onLogin }: AuthProps) {
           onLogin(user);
         }
       } else {
-        setError('פרטי התחברות שגויים. וודא שהאימייל והקוד/סיסמה נכונים.');
+        setError('פרטי התחברות שגויים. וודא שהאימייל והסיסמה/קוד נכונים.');
       }
     } catch (err) {
       setError('אירעה שגיאה בתהליך האימות. אנא נסה שוב.');
@@ -193,15 +223,13 @@ export function Auth({ onLogin }: AuthProps) {
                 </div>
 
                 <div className="space-y-3">
-                  <Label htmlFor="loginCode">
-                    {loginEmail.includes('admin') ? 'סיסמת מנהל' : 'קוד אישי'}
-                  </Label>
+                  <Label htmlFor="loginCode">סיסמה / קוד אישי</Label>
                   <div className="relative">
                     <Key className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="loginCode"
-                      type={loginEmail.includes('admin') ? 'password' : 'text'}
-                      placeholder={loginEmail.includes('admin') ? '••••••••' : '12345'}
+                      type="password"
+                      placeholder="••••••••"
                       className="pr-12 h-12 rounded-xl border-primary/20 bg-primary/5 focus-visible:ring-primary/20"
                       value={loginCode}
                       onChange={(e) => setLoginCode(e.target.value)}
