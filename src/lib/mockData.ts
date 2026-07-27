@@ -266,7 +266,11 @@ export const saveDB = (db: DB) => {
       .from(APP_STATE_TABLE)
       .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() })
       .then(({ error }) => {
-        if (error) console.error('Supabase saveDB failed:', error.message);
+        if (error) {
+          console.error('Supabase saveDB failed:', error.message);
+          // Surface silent write failures (e.g. session/permission issues) to the UI.
+          try { window.dispatchEvent(new CustomEvent('mas4u-save-error', { detail: error.message })); } catch { /* ignore */ }
+        }
       });
   }
 };

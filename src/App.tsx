@@ -60,7 +60,10 @@ export default function App() {
       setDbReady(true);
       setSyncTick((t) => t + 1);
     });
-    return () => { off(); offAuth(); };
+    // Surface save failures so nothing fails silently.
+    const onSaveErr = () => toast.error('שמירת הנתונים נכשלה', { description: 'בדוק חיבור/התחברות ונסה שוב.' });
+    window.addEventListener('mas4u-save-error', onSaveErr);
+    return () => { off(); offAuth(); window.removeEventListener('mas4u-save-error', onSaveErr); };
   }, []);
 
   useEffect(() => {
