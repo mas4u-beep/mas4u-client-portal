@@ -83,31 +83,31 @@ export function Auth({ onLogin }: AuthProps) {
     try {
       const email = loginEmail.trim().toLowerCase();
 
-      // 1) Preferred: secure Supabase Auth (email + password).
+      // Secure login via Supabase Auth (email + password).
       if (supabase) {
         const res = await signIn(email, loginCode);
-        if (res.ok) {
-          // Re-load the shared data now that we have an authenticated session
-          // (required once the database is locked to authenticated users).
-          await initDB();
-          const profile = (getDB().users || []).find(
-            (u) => u.email && u.email.toLowerCase() === email
-          );
-          if (!profile) {
-            setError('התחברת, אך לא נמצא פרופיל משתמש מתאים במערכת. פנה למנהל.');
-          } else if (profile.status === 'pending') {
-            setError('חשבונך ממתין לאישור מנהל. לא ניתן להתחבר כרגע.');
-          } else {
-            onLogin(profile);
-          }
+        if (!res.ok) {
+          setError('אימייל או סיסמה שגויים. אנא נסה שוב.');
           setIsLoading(false);
           return;
         }
-        // If Supabase Auth failed, fall through to the legacy login below
-        // (safety net during the transition, before the database is locked).
+        // Re-load the shared data now that we have an authenticated session.
+        await initDB();
+        const profile = (getDB().users || []).find(
+          (u) => u.email && u.email.toLowerCase() === email
+        );
+        if (!profile) {
+          setError('התחברת, אך לא נמצא פרופיל משתמש מתאים במערכת. פנה למנהל.');
+        } else if (profile.status === 'pending') {
+          setError('חשבונך ממתין לאישור מנהל. לא ניתן להתחבר כרגע.');
+        } else {
+          onLogin(profile);
+        }
+        setIsLoading(false);
+        return;
       }
 
-      // 2) Legacy fallback: email + personal code (works until the DB is locked).
+      // Local/dev fallback only (Supabase not configured): email + personal code.
       const user = await api.login(email, loginCode);
       if (user) {
         if (user.status === 'pending') {
@@ -116,7 +116,7 @@ export function Auth({ onLogin }: AuthProps) {
           onLogin(user);
         }
       } else {
-        setError('פרטי התחברות שגויים. וודא שהאימייל והסיסמה/קוד נכונים.');
+        setError('פרטי התחברות שגויים.');
       }
     } catch (err) {
       setError('אירעה שגיאה בתהליך האימות. אנא נסה שוב.');
@@ -253,18 +253,6 @@ export function Auth({ onLogin }: AuthProps) {
                 <Button type="submit" className="w-full text-lg h-14 rounded-full shadow-lg" disabled={isLoading}>
                   {isLoading ? 'רגע...' : 'התחברות'}
                 </Button>
-                
-                <div className="w-full p-4 rounded-xl bg-secondary/20 border border-secondary/30 text-xs text-secondary-foreground space-y-2 mt-4">
-                  <p className="font-bold mb-1">משתמש לבדיקה:</p>
-                  <div className="flex justify-between">
-                    <span>israel@example.com</span>
-                    <span className="font-mono bg-white/50 px-2 rounded">12345</span>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <span>admin@mas4u.co.il</span>
-                    <span className="font-mono bg-white/50 px-2 rounded">admin123</span>
-                  </div>
-                </div>
 
                 <Button
                   type="button"
