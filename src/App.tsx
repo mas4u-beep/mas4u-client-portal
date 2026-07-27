@@ -24,6 +24,7 @@ import { Calendar as CalendarIcon, CheckCircle2, AlertCircle, MessageCircle } fr
 import { cn } from '@/lib/utils';
 import { api } from './services/api';
 import { initDB, onDBChange, setCurrentActor, logActivity } from './lib/mockData';
+import { onAuthChange } from './lib/auth';
 import { User, Document } from './types';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -51,7 +52,15 @@ export default function App() {
       setDbReady(true);
       off = onDBChange(() => setSyncTick((t) => t + 1));
     });
-    return () => off();
+    // When Supabase restores or changes the auth session (e.g. after a page
+    // refresh once the DB is locked to authenticated users), re-load the data
+    // with the authenticated session so it isn't blocked.
+    const offAuth = onAuthChange(async () => {
+      await initDB();
+      setDbReady(true);
+      setSyncTick((t) => t + 1);
+    });
+    return () => { off(); offAuth(); };
   }, []);
 
   useEffect(() => {
