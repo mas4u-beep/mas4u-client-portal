@@ -343,6 +343,26 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
     }
   };
 
+  // Danger zone: wipe all clients + documents (keep staff, logins, templates).
+  const resetClientData = () => {
+    const newDb = {
+      ...db,
+      users: db.users.filter((u) => u.role !== 'client'),
+      documents: [],
+      timeline: [],
+      notifications: [],
+      appointments: [],
+      messages: [],
+      deadlines: (db.deadlines || []).filter((d) => !d.clientName),
+    };
+    setDb(newDb);
+    saveDB(newDb);
+    logActivity('איפוס: מחיקת כל הלקוחות והמסמכים');
+    setOpenClientId(null);
+    refreshData();
+    setAlertMessage('כל הלקוחות והמסמכים נמחקו. המערכת מאופסת.');
+  };
+
   // ---- Client pipeline (kanban) ----
   const PIPELINE_STAGES: { key: NonNullable<User['annualReportStatus']>; label: string; color: string }[] = [
     { key: 'not_started', label: 'טרם התחיל', color: 'bg-gray-400' },
@@ -1513,6 +1533,19 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                 <h3 className="text-sm font-bold flex items-center gap-2"><Download className="h-4 w-4 text-primary" />גיבוי נתונים</h3>
                 <p className="text-xs text-muted-foreground">הורדת עותק של כל נתוני המערכת לקובץ, לשמירה ליתר ביטחון.</p>
                 <Button variant="outline" onClick={exportBackup} className="rounded-full gap-2"><Download className="h-4 w-4" />ייצוא גיבוי (JSON)</Button>
+              </div>
+
+              {/* Danger zone */}
+              <div className="space-y-2 pt-4 mt-2 border-t border-red-200">
+                <h3 className="text-sm font-bold flex items-center gap-2 text-red-700"><AlertTriangle className="h-4 w-4" />אזור מסוכן</h3>
+                <p className="text-xs text-muted-foreground">מחיקת כל הלקוחות והמסמכים — לאיפוס המערכת לפני הכנסת נתונים אמיתיים. אנשי הצוות, ההרשאות והתבניות יישמרו. מומלץ לייצא גיבוי לפני. פעולה זו אינה הפיכה.</p>
+                <Button
+                  variant="destructive"
+                  className="rounded-full gap-2"
+                  onClick={() => setConfirmDialog({ message: 'למחוק את כל הלקוחות והמסמכים? אנשי הצוות, ההרשאות והתבניות יישמרו. פעולה זו אינה הפיכה.', onConfirm: resetClientData })}
+                >
+                  <Trash2 className="h-4 w-4" />מחק את כל הלקוחות והמסמכים
+                </Button>
               </div>
             </CardContent>
           </Card>
