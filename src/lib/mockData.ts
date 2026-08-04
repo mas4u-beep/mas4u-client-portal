@@ -375,6 +375,78 @@ export const logActivity = (action: string, detail?: string) => {
   saveDB({ ..._cache, activityLog: log });
 };
 
+// ---------------------------------------------------------------------------
+// Team tasks — shared creation + assignee notification, used by the tasks
+// screen AND by the tables ("create task on this client").
+// ---------------------------------------------------------------------------
+
+/** Build an in-app notification for the employee a task is assigned to. */
+export const buildAssigneeNotification = (
+  db: DB,
+  task: TeamTask,
+  actorName?: string,
+  reassigned = false
+): Notification | null => {
+  const emp = db.employees.find((e) => e.id === task.employeeId);
+  if (!emp) return null;
+  const user = db.users.find(
+    (u) =>
+      (emp.email && u.email && u.email.toLowerCase() === emp.email.toLowerCase()) ||
+      u.name === emp.name
+  );
+  if (!user) return null;
+  if (actorName && user.name === actorName) return null; // don't notify yourself
+  const rand = Math.random().toString(36).slice(2, 6);
+  return {
+    id: `n-${Date.now()}-${rand}`,
+    userId: user.id,
+    title: reassigned ? 'משימה הועברה אליך' : 'משימה חדשה הוקצתה לך',
+    message: `${actorName || 'המשרד'}: "${task.task}"${task.clientName ? ` · לקוח: ${task.clientName}` : ''}`,
+    timestamp: new Date().toISOString(),
+    isRead: false,
+    type: 'info',
+  };
+};
+
+export interface NewTeamTaskInput {
+  task: string;
+  employeeId: string;
+  assigneeName?: string;
+  assignedByName?: string;
+  priority?: 'high' | 'medium' | 'low';
+  dueDate?: string;
+  clientName?: string;
+  clientTz?: string;
+}
+
+/** Create a team task (appends to the shared DB and notifies the assignee). */
+export const createTeamTask = (input: NewTeamTaskInput): TeamTask => {
+  const now = new Date().toISOString();
+  const db = getDB();
+  const task: TeamTask = {
+    id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    employeeId: input.employeeId,
+    task: input.task,
+    priority: input.priority || 'medium',
+    isDone: false,
+    status: 'open',
+    dueDate: input.dueDate || undefined,
+    clientName: input.clientName || undefined,
+    clientTz: input.clientTz || undefined,
+    createdAt: now,
+    assignedByName: input.assignedByName,
+    assigneeName: input.assigneeName,
+    activity: [{ text: `הוקצתה ל${input.assigneeName || ''}${input.assignedByName ? ` ע"י ${input.assignedByName}` : ''}`, at: now }],
+  };
+  const notif = buildAssigneeNotification(db, task, input.assignedByName);
+  saveDB({
+    ...db,
+    teamTasks: [...(db.teamTasks || []), task],
+    notifications: notif ? [...(db.notifications || []), notif] : db.notifications,
+  });
+  return task;
+};
+
 export const addUser = (user: User) => {
   const db = getDB();
   db.users.push(user);

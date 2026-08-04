@@ -8,18 +8,39 @@ import {
   Table2, Upload, Search, Download, Plus, Trash2, ChevronRight, Loader2,
   ArrowUp, ArrowDown, X, Database, RotateCcw, SlidersHorizontal, Check,
   Users, FileCheck2, FileClock, PenLine, FileWarning, ChevronUp, ChevronDown, Maximize2,
+  MessageCircle, CircleUser, ClipboardList,
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { User } from '@/src/types';
+import { User, Employee } from '@/src/types';
 import {
   DataTableMeta, DataRow, TableColumn,
   listTables, createTable, deleteTable, getRows, insertRows, updateRow, addRow, deleteRow, subscribeRows,
 } from '@/src/lib/dataTables';
 import { parseWorkbook, buildColumns, buildRows, ParsedSheet } from '@/src/lib/excelImport';
-import { logActivity } from '@/src/lib/mockData';
+import { logActivity, getDB, createTeamTask } from '@/src/lib/mockData';
+
+// Reserved (non-column) keys stored inside a row's data.
+const OWNER_KEY = '__owner';
+// Detect a phone column by its header label.
+const PHONE_WORDS = ['טלפון', 'נייד', 'פלאפון', 'סלולרי', 'ווצאפ', 'וואטסאפ', 'וואצאפ', 'טל.', "טל'"];
+const isPhoneCol = (label: string) => PHONE_WORDS.some((w) => label.includes(w));
+// Normalize an Israeli phone number to an international wa.me target.
+const waLink = (raw: string) => {
+  const digits = String(raw || '').replace(/[^\d]/g, '');
+  if (!digits) return '';
+  let intl = digits;
+  if (digits.startsWith('0')) intl = '972' + digits.slice(1);
+  else if (!digits.startsWith('972')) intl = '972' + digits;
+  return `https://wa.me/${intl}`;
+};
+// Deterministic avatar color for an employee id.
+const AVATAR_COLORS = ['bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500', 'bg-teal-500', 'bg-sky-500', 'bg-indigo-500', 'bg-fuchsia-500'];
+const colorFor = (id: string) => AVATAR_COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
+const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 
 // Column semantics for coloring.
 const DONE_WORDS = ['חתימה', 'מוכן', 'הוגש', 'טופל', 'שולם', 'דווח', 'שודר'];
@@ -63,6 +84,8 @@ export function DataTables({ currentUser }: DataTablesProps) {
   const [colSearch, setColSearch] = useState('');
   const [detailRow, setDetailRow] = useState<DataRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null); // 'mine' | empId | null
+  const [taskFor, setTaskFor] = useState<DataRow | null>(null); // "create task on client" dialog
   const [importer, setImporter] = useState<null | { fileName: string; sheets: (ParsedSheet & { include: boolean; dataStart: number; name: string })[] }>(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState('');
@@ -70,6 +93,14 @@ export function DataTables({ currentUser }: DataTablesProps) {
 
   const selected = tables.find((t) => t.id === selectedId) || null;
   const uid = currentUser?.id || 'anon';
+
+  // Staff (for the "אחראי" owner picker + "create task") — read from the shared DB.
+  const employees = getDB().employees || [];
+  const myEmp = employees.find(
+    (e) => (currentUser?.email && e.email && e.email.toLowerCase() === currentUser.email.toLowerCase()) || (currentUser?.name && e.name === currentUser.name)
+  );
+  const empById = (id?: string) => employees.find((e) => e.id === id) || null;
+  const todayDot = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
   const refreshTables = async () => {
     setLoadingTables(true);
@@ -91,7 +122,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
       const h = localStorage.getItem(`mas4u_hide_${uid}_${selectedId}`);
       setHidden(new Set(h ? JSON.parse(h) : defaultHidden(tables.find((t) => t.id === selectedId))));
     } catch { setColOrder([]); setHidden(new Set()); }
-    setSortCol(null); setSearch(''); setStatusFilter(null);
+    setSortCol(null); setSearch(''); setStatusFilter(null); setOwnerFilter(null);
     return () => off();
   }, [selectedId, uid]);
 
@@ -155,8 +186,12 @@ export function DataTables({ currentUser }: DataTablesProps) {
     let out = rows;
     const active = statusFilter ? statusCards.find((c) => c.key === statusFilter) : null;
     if (active) out = out.filter(active.match);
+    if (ownerFilter) {
+      const want = ownerFilter === 'mine' ? myEmp?.id : ownerFilter;
+      out = out.filter((r) => (r.data[OWNER_KEY] || '') === (want || ''));
+    }
     const q = search.trim().toLowerCase();
-    if (q) out = out.filter((r) => Object.values(r.data).some((v) => String(v ?? '').toLowerCase().includes(q)));
+    if (q) out = out.filter((r) => Object.entries(r.data).some(([k, v]) => !k.startsWith('__') && String(v ?? '').toLowerCase().includes(q)));
     if (sortCol) {
       out = [...out].sort((a, b) => {
         const av = String(a.data[sortCol] ?? ''), bv = String(b.data[sortCol] ?? '');
@@ -166,7 +201,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
       });
     }
     return out;
-  }, [rows, search, sortCol, sortDir, statusFilter, statusCards]);
+  }, [rows, search, sortCol, sortDir, statusFilter, statusCards, ownerFilter, myEmp?.id]);
 
   const commitCell = async (rowId: string, key: string, value: string) => {
     const row = rows.find((r) => r.id === rowId);
@@ -176,6 +211,44 @@ export function DataTables({ currentUser }: DataTablesProps) {
     if (detailRow?.id === rowId) setDetailRow({ ...detailRow, data: newData });
     try { await updateRow(rowId, newData); }
     catch (e: any) { toast.error('שמירת התא נכשלה', { description: e?.message }); getRows(selectedId!).then(setRows); }
+  };
+
+  // Assign / clear the responsible employee ("אחראי") for a row.
+  const setOwner = async (rowId: string, empId: string | null) => {
+    const row = rows.find((r) => r.id === rowId);
+    if (!row) return;
+    const newData = { ...row.data };
+    if (empId) newData[OWNER_KEY] = empId; else delete newData[OWNER_KEY];
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, data: newData } : r)));
+    if (detailRow?.id === rowId) setDetailRow({ ...detailRow, data: newData });
+    try { await updateRow(rowId, newData); } catch (e: any) { toast.error('שמירת האחראי נכשלה', { description: e?.message }); getRows(selectedId!).then(setRows); }
+  };
+
+  // The client's display name from a row (first visible/name column).
+  const rowClientName = (r: DataRow): string => {
+    const nameCol = (selected?.columns || []).find((c) => /משפחה|שם|לקוח|פרטי/.test(c.label)) || selected?.columns?.[0];
+    return nameCol ? String(r.data[nameCol.key] ?? '').trim() : '';
+  };
+  const findIdVal = (r: DataRow): string => {
+    const c = (selected?.columns || []).find((x) => /ת"?ז|ת\.ז|תעודת זהות|ח\.פ/.test(x.label));
+    return c ? String(r.data[c.key] ?? '').trim() : '';
+  };
+
+  const createTaskForRow = (empId: string, priority: 'high' | 'medium' | 'low', text: string) => {
+    if (!taskFor) return;
+    const target = empById(empId);
+    createTeamTask({
+      task: text.trim() || `טיפול בלקוח ${rowClientName(taskFor)}`,
+      employeeId: empId,
+      assigneeName: target?.name,
+      assignedByName: currentUser?.name || myEmp?.name || 'המשרד',
+      priority,
+      clientName: rowClientName(taskFor),
+      clientTz: findIdVal(taskFor),
+    });
+    logActivity('יצר משימה מטבלה', `${rowClientName(taskFor)} → ${target?.name || ''}`);
+    toast.success(`נוצרה משימה ל${target?.name || ''}`);
+    setTaskFor(null);
   };
 
   const handleAddRow = async () => {
@@ -234,11 +307,37 @@ export function DataTables({ currentUser }: DataTablesProps) {
     finally { setImporting(false); setImportProgress(''); }
   };
 
-  const cellDisplay = (label: string, val: string) => {
+  const cellDisplay = (label: string, val: string, onQuickSet?: () => void) => {
     const kind = statusKind(label);
-    if (!val) return kind === 'done'
-      ? <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-muted-foreground/25 text-transparent">·</span>
-      : <span className="text-muted-foreground/25">—</span>;
+    // Phone column → tappable WhatsApp button next to the number.
+    if (isPhoneCol(label) && val) {
+      const link = waLink(val);
+      return (
+        <span className="inline-flex items-center gap-1.5 align-bottom" dir="ltr">
+          {link && (
+            <a href={link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+               className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-600 hover:bg-green-500 hover:text-white transition-colors shrink-0" title="שלח וואטסאפ">
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <span className="truncate">{val}</span>
+        </span>
+      );
+    }
+    if (!val) {
+      // Empty status cell → one-click "mark done today".
+      if (kind === 'done' && onQuickSet) {
+        return (
+          <button onClick={(e) => { e.stopPropagation(); onQuickSet(); }} title="לחץ לסימון בוצע (תאריך היום)"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground/40 hover:border-green-500 hover:bg-green-50 hover:text-green-600 transition-colors">
+            <Check className="h-3 w-3 opacity-0 hover:opacity-100" />
+          </button>
+        );
+      }
+      return kind === 'done'
+        ? <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-muted-foreground/25 text-transparent">·</span>
+        : <span className="text-muted-foreground/25">—</span>;
+    }
     if (kind === 'done') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 ring-1 ring-green-600/20 text-[11px] font-bold whitespace-nowrap"><Check className="h-3 w-3" />{val}</span>;
     if (kind === 'flag') return <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 ring-1 ring-amber-600/20 text-[11px] font-medium max-w-[180px] truncate align-bottom" title={val}>{val}</span>;
     return <span className="truncate inline-block max-w-[220px] align-bottom">{val}</span>;
@@ -355,11 +454,29 @@ export function DataTables({ currentUser }: DataTablesProps) {
           )}
         </div>
 
+        {/* Owner ("אחראי") filter */}
+        {employees.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><CircleUser className="h-3.5 w-3.5" />אחראי:</span>
+            <button onClick={() => setOwnerFilter(null)} className={cn('px-3 h-7 rounded-full border text-xs font-medium', !ownerFilter ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>הכל</button>
+            {myEmp && (
+              <button onClick={() => setOwnerFilter((v) => (v === 'mine' ? null : 'mine'))} className={cn('px-3 h-7 rounded-full border text-xs font-medium', ownerFilter === 'mine' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>שלי</button>
+            )}
+            {employees.map((e) => (
+              <button key={e.id} onClick={() => setOwnerFilter((v) => (v === e.id ? null : e.id))}
+                className={cn('pl-3 pr-1.5 h-7 rounded-full border text-xs font-medium inline-flex items-center gap-1.5', ownerFilter === e.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>
+                <span className={cn('h-5 w-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center', colorFor(e.id))}>{initials(e.name)}</span>
+                {e.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Active-filter banner */}
-        {(statusFilter || search) && !loadingRows && (
+        {(statusFilter || search || ownerFilter) && !loadingRows && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground -mt-1">
             <span>מציג <b className="text-foreground">{filteredSorted.length.toLocaleString('he-IL')}</b> מתוך {rows.length.toLocaleString('he-IL')}</span>
-            <button onClick={() => { setStatusFilter(null); setSearch(''); }} className="inline-flex items-center gap-1 text-primary hover:underline"><X className="h-3 w-3" />נקה סינון</button>
+            <button onClick={() => { setStatusFilter(null); setSearch(''); setOwnerFilter(null); }} className="inline-flex items-center gap-1 text-primary hover:underline"><X className="h-3 w-3" />נקה סינון</button>
           </div>
         )}
 
@@ -371,7 +488,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
               <table className="text-[13px] w-full border-collapse">
                 <thead className="sticky top-0 z-20">
                   <tr className="bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80">
-                    <th className="w-10 px-1 py-2.5 sticky right-0 z-30 bg-muted/95 backdrop-blur"></th>
+                    <th className="w-16 px-1 py-2.5 sticky right-0 z-30 bg-muted/95 backdrop-blur text-[10px] font-bold text-muted-foreground">אחראי</th>
                     {visibleCols.map((c, idx) => {
                       const sorted = sortCol === c.key;
                       return (
@@ -379,7 +496,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
                           key={c.key}
                           className={cn(
                             'px-3 py-2.5 text-right font-bold whitespace-nowrap border-e border-border/40 select-none',
-                            idx === 0 && 'sticky right-10 z-20 bg-muted/95 backdrop-blur shadow-[6px_0_6px_-4px_rgba(0,0,0,0.12)]',
+                            idx === 0 && 'sticky right-16 z-20 bg-muted/95 backdrop-blur shadow-[6px_0_6px_-4px_rgba(0,0,0,0.12)]',
                             sorted && 'text-primary',
                           )}
                         >
@@ -401,11 +518,38 @@ export function DataTables({ currentUser }: DataTablesProps) {
                 <tbody>
                   {filteredSorted.map((r, ri) => (
                     <tr key={r.id} className={cn('border-t border-border/30 hover:bg-primary/[0.06] transition-colors group/row', ri % 2 && 'bg-muted/20')}>
-                      <td className={cn('w-10 px-0 text-center align-middle sticky right-0 z-10', ri % 2 ? 'bg-muted/20' : 'bg-background', 'group-hover/row:bg-primary/[0.06]')}>
-                        <button className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-primary/10" onClick={() => setDetailRow(r)} title="פתח כרטיס מלא"><Maximize2 className="h-3.5 w-3.5" /></button>
+                      <td className={cn('w-16 px-1 align-middle sticky right-0 z-10', ri % 2 ? 'bg-muted/20' : 'bg-background', 'group-hover/row:bg-primary/[0.06]')}>
+                        <div className="flex items-center justify-center gap-0.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <button title="אחראי / פעולות" className="shrink-0">
+                                {(() => {
+                                  const owner = empById(r.data[OWNER_KEY]);
+                                  return owner
+                                    ? <span className={cn('h-6 w-6 rounded-full text-white text-[9px] font-bold flex items-center justify-center', colorFor(owner.id))} title={`אחראי: ${owner.name}`}>{initials(owner.name)}</span>
+                                    : <span className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary"><CircleUser className="h-3.5 w-3.5" /></span>;
+                                })()}
+                              </button>
+                            } />
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuLabel>אחראי על הלקוח</DropdownMenuLabel>
+                              {employees.map((e) => (
+                                <DropdownMenuItem key={e.id} onClick={() => setOwner(r.id, e.id)}>
+                                  <span className={cn('h-4 w-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center me-2', colorFor(e.id))}>{initials(e.name)}</span>
+                                  {e.name}{r.data[OWNER_KEY] === e.id && <Check className="h-3.5 w-3.5 ms-auto text-primary" />}
+                                </DropdownMenuItem>
+                              ))}
+                              {r.data[OWNER_KEY] && <DropdownMenuItem onClick={() => setOwner(r.id, null)}><X className="h-3.5 w-3.5 me-2" />הסר אחראי</DropdownMenuItem>}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setTaskFor(r)}><ClipboardList className="h-3.5 w-3.5 me-2 text-primary" />צור משימה על הלקוח</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <button className="h-6 w-6 inline-flex items-center justify-center rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-primary/10 shrink-0" onClick={() => setDetailRow(r)} title="פתח כרטיס מלא"><Maximize2 className="h-3.5 w-3.5" /></button>
+                        </div>
                       </td>
                       {visibleCols.map((c, idx) => {
                         const val = String(r.data[c.key] ?? '');
+                        const isDone = statusKind(c.label) === 'done';
                         return (
                           <EditableCell
                             key={c.key}
@@ -413,7 +557,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
                             sticky={idx === 0}
                             zebra={!!(ri % 2)}
                             onCommit={(v) => commitCell(r.id, c.key, v)}
-                            render={() => cellDisplay(c.label, val)}
+                            render={() => cellDisplay(c.label, val, isDone && !val ? () => commitCell(r.id, c.key, todayDot()) : undefined)}
                           />
                         );
                       })}
@@ -483,28 +627,79 @@ export function DataTables({ currentUser }: DataTablesProps) {
 
         {/* Row detail drawer */}
         <Sheet open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)}>
-          <SheetContent side="left" className="w-[420px] max-w-full p-0" dir="rtl">
-            <SheetHeader className="p-4 border-b bg-primary/5"><SheetTitle>כרטיס שורה</SheetTitle></SheetHeader>
-            {detailRow && (
-              <div className="p-4 space-y-2 overflow-y-auto max-h-[calc(100vh-8rem)]">
-                {orderedCols.map((c) => (
-                  <div key={c.key} className="grid grid-cols-3 items-center gap-2">
-                    <label className="text-xs text-muted-foreground col-span-1">{c.label}</label>
-                    <Input
-                      defaultValue={String(detailRow.data[c.key] ?? '')}
-                      onBlur={(e) => commitCell(detailRow.id, c.key, e.target.value)}
-                      className="h-9 rounded-lg col-span-2 text-sm"
-                    />
+          <SheetContent side="left" className="w-[440px] max-w-full p-0 flex flex-col" dir="rtl">
+            <SheetHeader className="p-4 border-b bg-primary/5">
+              <SheetTitle className="truncate">{detailRow ? (rowClientName(detailRow) || 'כרטיס שורה') : 'כרטיס שורה'}</SheetTitle>
+            </SheetHeader>
+            {detailRow && (() => {
+              const clientName = rowClientName(detailRow);
+              const owner = empById(detailRow.data[OWNER_KEY]);
+              const clientTasks = clientName ? (getDB().teamTasks || []).filter((t) => t.clientName === clientName && !t.isDone) : [];
+              return (
+              <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                {/* Owner + create task */}
+                {employees.length > 0 && (
+                  <div className="rounded-xl border border-border/50 p-3 space-y-2 bg-muted/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-muted-foreground inline-flex items-center gap-1"><CircleUser className="h-3.5 w-3.5" />אחראי על הלקוח</span>
+                      <Button size="sm" className="rounded-full h-7 gap-1 text-xs" onClick={() => setTaskFor(detailRow)}><ClipboardList className="h-3.5 w-3.5" />צור משימה</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {employees.map((e) => (
+                        <button key={e.id} onClick={() => setOwner(detailRow.id, owner?.id === e.id ? null : e.id)}
+                          className={cn('pl-2.5 pr-1 h-7 rounded-full border text-xs inline-flex items-center gap-1.5', owner?.id === e.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>
+                          <span className={cn('h-4 w-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center', colorFor(e.id))}>{initials(e.name)}</span>{e.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {/* Open tasks on this client */}
+                {clientTasks.length > 0 && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-1.5">
+                    <span className="text-xs font-bold text-primary inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" />משימות פתוחות על הלקוח ({clientTasks.length})</span>
+                    {clientTasks.map((t) => (
+                      <div key={t.id} className="text-xs bg-background rounded-lg px-2 py-1.5 border border-border/40 flex items-center justify-between gap-2">
+                        <span className="truncate">{t.task}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{t.assigneeName || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Editable fields */}
+                <div className="space-y-2">
+                  {orderedCols.map((c) => (
+                    <div key={c.key} className="grid grid-cols-3 items-center gap-2">
+                      <label className="text-xs text-muted-foreground col-span-1">{c.label}</label>
+                      <Input
+                        defaultValue={String(detailRow.data[c.key] ?? '')}
+                        onBlur={(e) => commitCell(detailRow.id, c.key, e.target.value)}
+                        className="h-9 rounded-lg col-span-2 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
                 <div className="pt-2 flex justify-between">
                   <Button variant="ghost" className="text-red-500 gap-2 rounded-full" onClick={() => handleDeleteRow(detailRow.id)}><Trash2 className="h-4 w-4" />מחק שורה</Button>
                   <Button variant="outline" className="rounded-full" onClick={() => setDetailRow(null)}>סגור</Button>
                 </div>
               </div>
-            )}
+              );
+            })()}
           </SheetContent>
         </Sheet>
+
+        {/* Create-task-on-client dialog */}
+        <CreateTaskDialog
+          row={taskFor}
+          clientName={taskFor ? rowClientName(taskFor) : ''}
+          employees={employees}
+          defaultEmp={(taskFor && empById(taskFor.data[OWNER_KEY])?.id) || myEmp?.id || employees[0]?.id || ''}
+          onClose={() => setTaskFor(null)}
+          onCreate={createTaskForRow}
+        />
       </motion.div>
     );
   }
@@ -546,6 +741,77 @@ export function DataTables({ currentUser }: DataTablesProps) {
   );
 }
 
+// Create a team task tied to a specific client (table row).
+function CreateTaskDialog({
+  row, clientName, employees, defaultEmp, onClose, onCreate,
+}: {
+  row: DataRow | null;
+  clientName: string;
+  employees: Employee[];
+  defaultEmp: string;
+  onClose: () => void;
+  onCreate: (empId: string, priority: 'high' | 'medium' | 'low', text: string) => void;
+}) {
+  const [text, setText] = useState('');
+  const [empId, setEmpId] = useState('');
+  const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
+  const lastRow = useRef<string | null>(null);
+  useEffect(() => {
+    if (row && row.id !== lastRow.current) {
+      lastRow.current = row.id;
+      setText(clientName ? `טיפול בלקוח ${clientName}` : '');
+      setEmpId(defaultEmp);
+      setPriority('medium');
+    }
+    if (!row) lastRow.current = null;
+  }, [row, clientName, defaultEmp]);
+
+  const PRIOS: { k: 'high' | 'medium' | 'low'; l: string; on: string; off: string }[] = [
+    { k: 'high', l: 'דחוף', on: 'bg-red-500 text-white border-red-500', off: 'text-red-600 border-red-200' },
+    { k: 'medium', l: 'רגיל', on: 'bg-orange-500 text-white border-orange-500', off: 'text-orange-600 border-orange-200' },
+    { k: 'low', l: 'נמוך', on: 'bg-blue-500 text-white border-blue-500', off: 'text-blue-600 border-blue-200' },
+  ];
+
+  return (
+    <Sheet open={!!row} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="left" className="w-[400px] max-w-full p-0" dir="rtl">
+        <SheetHeader className="p-4 border-b bg-primary/5"><SheetTitle className="flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />משימה חדשה{clientName ? ` · ${clientName}` : ''}</SheetTitle></SheetHeader>
+        {row && (
+          <div className="p-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground">מה צריך לעשות?</label>
+              <Input value={text} onChange={(e) => setText(e.target.value)} className="h-11 rounded-xl" placeholder="תיאור המשימה" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground">למי מעבירים?</label>
+              <div className="flex flex-wrap gap-2">
+                {employees.map((e) => (
+                  <button key={e.id} onClick={() => setEmpId(e.id)}
+                    className={cn('px-4 h-10 rounded-full border text-sm font-medium transition-colors', empId === e.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>
+                    {e.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground">עדיפות</label>
+              <div className="flex gap-2">
+                {PRIOS.map((p) => (
+                  <button key={p.k} onClick={() => setPriority(p.k)} className={cn('px-4 h-10 rounded-full border text-sm font-bold transition-colors', priority === p.k ? p.on : cn('bg-background', p.off))}>{p.l}</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" className="rounded-full" onClick={onClose}>ביטול</Button>
+              <Button className="rounded-full gap-2" onClick={() => empId && onCreate(empId, priority, text)}><Plus className="h-4 w-4" />צור משימה</Button>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // Editable cell — click to edit inline; blur/Enter to save.
 function EditableCell({ value, onCommit, render, sticky, zebra }: { value: string; onCommit: (v: string) => void; render: () => React.ReactNode; sticky?: boolean; zebra?: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -554,7 +820,7 @@ function EditableCell({ value, onCommit, render, sticky, zebra }: { value: strin
       className={cn(
         'px-3 py-2 border-e border-border/20 whitespace-nowrap max-w-[240px] cursor-text transition-colors',
         !editing && 'hover:bg-primary/10 hover:ring-1 hover:ring-inset hover:ring-primary/30',
-        sticky && cn('sticky right-10 z-10 font-semibold shadow-[6px_0_6px_-4px_rgba(0,0,0,0.10)]', zebra ? 'bg-muted/20' : 'bg-background', 'group-hover/row:bg-primary/[0.06]'),
+        sticky && cn('sticky right-16 z-10 font-semibold shadow-[6px_0_6px_-4px_rgba(0,0,0,0.10)]', zebra ? 'bg-muted/20' : 'bg-background', 'group-hover/row:bg-primary/[0.06]'),
       )}
       onClick={() => !editing && setEditing(true)}
       title={editing ? undefined : 'לחץ לעריכה'}

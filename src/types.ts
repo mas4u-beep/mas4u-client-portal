@@ -148,12 +148,18 @@ export interface TeamTaskActivity {
   at: string;
 }
 
+export type TeamTaskStatus = 'open' | 'in_progress' | 'done';
+
 export interface TeamTask {
   id: string;
   employeeId: string;          // current assignee
   task: string;
   priority: 'high' | 'medium' | 'low';
   isDone: boolean;
+  status?: TeamTaskStatus;     // open / in_progress / done (isDone kept in sync)
+  dueDate?: string;            // YYYY-MM-DD (optional deadline)
+  clientName?: string;         // linked client (from a table row), optional
+  clientTz?: string;           // linked client ת"ז, optional
   createdAt: string;
   assignedByName?: string;     // who created / last assigned the task
   assigneeName?: string;       // denormalized assignee name for display

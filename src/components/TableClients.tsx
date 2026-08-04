@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronRight, Search, Loader2, User as UserIcon, Users, Phone, Hash, FileText, Wallet, Database, ClipboardCheck, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ChevronRight, Search, Loader2, User as UserIcon, Users, Phone, Hash, FileText, Wallet, Database, ClipboardCheck, CheckCircle2, Clock, AlertTriangle, ClipboardList, Plus, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -13,6 +14,14 @@ import {
   DataTableMeta, DataRow, TableColumn,
   listTables, getRows, updateRow, findIdColumn, findRowsByValue,
 } from '@/src/lib/dataTables';
+import { getDB, createTeamTask, logActivity } from '@/src/lib/mockData';
+
+const waLink = (raw: string) => {
+  const digits = String(raw || '').replace(/[^\d]/g, '');
+  if (!digits) return '';
+  const intl = digits.startsWith('0') ? '972' + digits.slice(1) : digits.startsWith('972') ? digits : '972' + digits;
+  return `https://wa.me/${intl}`;
+};
 
 const DONE_WORDS = ['חתימה', 'מוכן', 'הוגש', 'טופל', 'שולם', 'דווח', 'שודר'];
 const FLAG_WORDS = ['חסר'];
@@ -31,6 +40,11 @@ export function TableClients({ currentUser }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [related, setRelated] = useState<{ table: DataTableMeta; rows: DataRow[] }[]>([]);
   const [loadingRelated, setLoadingRelated] = useState(false);
+  const [tick, setTick] = useState(0); // force re-read of tasks after creating one
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [ntText, setNtText] = useState('');
+  const [ntEmp, setNtEmp] = useState('');
+  const [ntPriority, setNtPriority] = useState<'high' | 'medium' | 'low'>('medium');
 
   useEffect(() => {
     listTables().then((t) => {
@@ -96,6 +110,37 @@ export function TableClients({ currentUser }: Props) {
     try { await updateRow(row.id, newData); } catch (e: any) { toast.error('שמירה נכשלה', { description: e?.message }); }
   };
 
+  // Team / tasks bridge (read from the shared app-state DB).
+  const employees = getDB().employees || [];
+  const myEmp = employees.find(
+    (e) => (currentUser?.email && e.email && e.email.toLowerCase() === currentUser.email.toLowerCase()) || (currentUser?.name && e.name === currentUser.name)
+  );
+  const clientTasksFor = (name: string) => (getDB().teamTasks || []).filter((t) => t.clientName && t.clientName === name && !t.isDone);
+
+  const openNewTask = (name: string) => {
+    setNtText(name ? `טיפול בלקוח ${name}` : '');
+    setNtEmp(myEmp?.id || employees[0]?.id || '');
+    setNtPriority('medium');
+    setNewTaskOpen(true);
+  };
+  const submitNewTask = (name: string, tz: string) => {
+    if (!ntEmp) { toast.error('בחר עובד'); return; }
+    const target = employees.find((e) => e.id === ntEmp);
+    createTeamTask({
+      task: ntText.trim() || `טיפול בלקוח ${name}`,
+      employeeId: ntEmp,
+      assigneeName: target?.name,
+      assignedByName: currentUser?.name || myEmp?.name || 'המשרד',
+      priority: ntPriority,
+      clientName: name,
+      clientTz: tz,
+    });
+    logActivity('יצר משימה מלקוח', `${name} → ${target?.name || ''}`);
+    toast.success(`נוצרה משימה ל${target?.name || ''}`);
+    setNewTaskOpen(false);
+    setTick((t) => t + 1);
+  };
+
   const valueChip = (label: string, val: string) => {
     const kind = statusKind(label);
     if (!val) return <span className="text-muted-foreground/30">—</span>;
@@ -125,12 +170,20 @@ export function TableClients({ currentUser }: Props) {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setOpenId(null)}><ChevronRight className="h-5 w-5" /></Button>
           <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-lg font-black">{clientName(openClient).charAt(0)}</div>
-          <div>
-            <h2 className="text-2xl font-black text-primary">{clientName(openClient)}</h2>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-black text-primary truncate">{clientName(openClient)}</h2>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
               {idCol && <span className="flex items-center gap-1"><Hash className="h-3.5 w-3.5" />{openClientIdValue || '—'}</span>}
-              {phoneCol && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{String(openClient.data[phoneCol.key] ?? '') || '—'}</span>}
+              {phoneCol && String(openClient.data[phoneCol.key] ?? '') && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />{String(openClient.data[phoneCol.key] ?? '')}
+                  <a href={waLink(String(openClient.data[phoneCol.key] ?? ''))} target="_blank" rel="noreferrer" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-600 hover:bg-green-500 hover:text-white transition-colors" title="שלח וואטסאפ"><MessageCircle className="h-3.5 w-3.5" /></a>
+                </span>
+              )}
             </div>
+          </div>
+          <div className="ms-auto">
+            <Button className="rounded-full gap-2" onClick={() => openNewTask(clientName(openClient))}><ClipboardList className="h-4 w-4" />צור משימה</Button>
           </div>
         </div>
 
@@ -165,6 +218,34 @@ export function TableClients({ currentUser }: Props) {
                     );
                   })}
                 </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {/* Open tasks on this client */}
+        {(() => {
+          const _ = tick; // re-read after creating a task
+          const ct = clientTasksFor(clientName(openClient));
+          if (ct.length === 0) return null;
+          return (
+            <Card className="border-none shadow-sm">
+              <CardHeader className="bg-primary/5 border-b border-primary/10">
+                <CardTitle className="text-lg flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" />משימות פתוחות ({ct.length})</CardTitle>
+                <CardDescription>משימות שנפתחו על הלקוח הזה.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                {ct.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-background border border-border/50">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{t.task}</p>
+                      <p className="text-[11px] text-muted-foreground">אחראי: {t.assigneeName || '—'}{t.assignedByName ? ` · מאת: ${t.assignedByName}` : ''}{t.dueDate ? ` · יעד ${t.dueDate}` : ''}</p>
+                    </div>
+                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0', t.priority === 'high' ? 'bg-red-100 text-red-600' : t.priority === 'medium' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
+                      {t.priority === 'high' ? 'דחוף' : t.priority === 'medium' ? 'רגיל' : 'נמוך'}
+                    </span>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           );
@@ -220,6 +301,42 @@ export function TableClients({ currentUser }: Props) {
             )}
           </CardContent>
         </Card>
+
+        {/* Create-task dialog */}
+        <Sheet open={newTaskOpen} onOpenChange={setNewTaskOpen}>
+          <SheetContent side="left" className="w-[400px] max-w-full p-0" dir="rtl">
+            <SheetHeader className="p-4 border-b bg-primary/5"><SheetTitle className="flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />משימה חדשה · {clientName(openClient)}</SheetTitle></SheetHeader>
+            <div className="p-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground">מה צריך לעשות?</label>
+                <Input value={ntText} onChange={(e) => setNtText(e.target.value)} className="h-11 rounded-xl" placeholder="תיאור המשימה" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground">למי מעבירים?</label>
+                <div className="flex flex-wrap gap-2">
+                  {employees.map((e) => (
+                    <button key={e.id} onClick={() => setNtEmp(e.id)}
+                      className={cn('px-4 h-10 rounded-full border text-sm font-medium transition-colors', ntEmp === e.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>
+                      {e.name}{myEmp?.id === e.id ? ' (אני)' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground">עדיפות</label>
+                <div className="flex gap-2">
+                  {([['high', 'דחוף', 'bg-red-500 text-white border-red-500', 'text-red-600 border-red-200'], ['medium', 'רגיל', 'bg-orange-500 text-white border-orange-500', 'text-orange-600 border-orange-200'], ['low', 'נמוך', 'bg-blue-500 text-white border-blue-500', 'text-blue-600 border-blue-200']] as [any, string, string, string][]).map(([k, l, on, off]) => (
+                    <button key={k} onClick={() => setNtPriority(k)} className={cn('px-4 h-10 rounded-full border text-sm font-bold transition-colors', ntPriority === k ? on : cn('bg-background', off))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between pt-2">
+                <Button variant="outline" className="rounded-full" onClick={() => setNewTaskOpen(false)}>ביטול</Button>
+                <Button className="rounded-full gap-2" onClick={() => submitNewTask(clientName(openClient), openClientIdValue)}><Plus className="h-4 w-4" />צור משימה</Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </motion.div>
     );
   }
