@@ -10,7 +10,6 @@ import {
   Users, FileCheck2, FileClock, PenLine, FileWarning, ChevronUp, ChevronDown, Maximize2,
   MessageCircle, CircleUser, ClipboardList,
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -86,6 +85,7 @@ export function DataTables({ currentUser }: DataTablesProps) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<string | null>(null); // 'mine' | empId | null
   const [taskFor, setTaskFor] = useState<DataRow | null>(null); // "create task on client" dialog
+  const [ownerFor, setOwnerFor] = useState<DataRow | null>(null); // shared owner-picker dialog
   const [importer, setImporter] = useState<null | { fileName: string; sheets: (ParsedSheet & { include: boolean; dataStart: number; name: string })[] }>(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState('');
@@ -520,30 +520,16 @@ export function DataTables({ currentUser }: DataTablesProps) {
                     <tr key={r.id} className={cn('border-t border-border/30 hover:bg-primary/[0.06] transition-colors group/row', ri % 2 && 'bg-muted/20')}>
                       <td className={cn('w-16 px-1 align-middle sticky right-0 z-10', ri % 2 ? 'bg-muted/20' : 'bg-background', 'group-hover/row:bg-primary/[0.06]')}>
                         <div className="flex items-center justify-center gap-0.5">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={
-                              <button title="אחראי / פעולות" className="shrink-0">
-                                {(() => {
-                                  const owner = empById(r.data[OWNER_KEY]);
-                                  return owner
-                                    ? <span className={cn('h-6 w-6 rounded-full text-white text-[9px] font-bold flex items-center justify-center', colorFor(owner.id))} title={`אחראי: ${owner.name}`}>{initials(owner.name)}</span>
-                                    : <span className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary"><CircleUser className="h-3.5 w-3.5" /></span>;
-                                })()}
+                          {employees.length > 0 && (() => {
+                            const owner = empById(r.data[OWNER_KEY]);
+                            return (
+                              <button title={owner ? `אחראי: ${owner.name}` : 'שייך אחראי'} className="shrink-0" onClick={() => setOwnerFor(r)}>
+                                {owner
+                                  ? <span className={cn('h-6 w-6 rounded-full text-white text-[9px] font-bold flex items-center justify-center', colorFor(owner.id))}>{initials(owner.name)}</span>
+                                  : <span className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary"><CircleUser className="h-3.5 w-3.5" /></span>}
                               </button>
-                            } />
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuLabel>אחראי על הלקוח</DropdownMenuLabel>
-                              {employees.map((e) => (
-                                <DropdownMenuItem key={e.id} onClick={() => setOwner(r.id, e.id)}>
-                                  <span className={cn('h-4 w-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center me-2', colorFor(e.id))}>{initials(e.name)}</span>
-                                  {e.name}{r.data[OWNER_KEY] === e.id && <Check className="h-3.5 w-3.5 ms-auto text-primary" />}
-                                </DropdownMenuItem>
-                              ))}
-                              {r.data[OWNER_KEY] && <DropdownMenuItem onClick={() => setOwner(r.id, null)}><X className="h-3.5 w-3.5 me-2" />הסר אחראי</DropdownMenuItem>}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setTaskFor(r)}><ClipboardList className="h-3.5 w-3.5 me-2 text-primary" />צור משימה על הלקוח</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            );
+                          })()}
                           <button className="h-6 w-6 inline-flex items-center justify-center rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-primary/10 shrink-0" onClick={() => setDetailRow(r)} title="פתח כרטיס מלא"><Maximize2 className="h-3.5 w-3.5" /></button>
                         </div>
                       </td>
@@ -686,6 +672,34 @@ export function DataTables({ currentUser }: DataTablesProps) {
                   <Button variant="outline" className="rounded-full" onClick={() => setDetailRow(null)}>סגור</Button>
                 </div>
               </div>
+              );
+            })()}
+          </SheetContent>
+        </Sheet>
+
+        {/* Shared owner-picker (one instance for all rows — not per row, for performance) */}
+        <Sheet open={!!ownerFor} onOpenChange={(o) => !o && setOwnerFor(null)}>
+          <SheetContent side="left" className="w-[360px] max-w-full p-0" dir="rtl">
+            <SheetHeader className="p-4 border-b bg-primary/5"><SheetTitle className="flex items-center gap-2"><CircleUser className="h-4 w-4 text-primary" />אחראי{ownerFor ? ` · ${rowClientName(ownerFor)}` : ''}</SheetTitle></SheetHeader>
+            {ownerFor && (() => {
+              const live = rows.find((r) => r.id === ownerFor.id) || ownerFor;
+              const cur = String(live.data[OWNER_KEY] || '');
+              return (
+                <div className="p-4 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {employees.map((e) => (
+                      <button key={e.id} onClick={() => { setOwner(live.id, cur === e.id ? null : e.id); setOwnerFor(null); }}
+                        className={cn('pl-3 pr-1.5 h-10 rounded-full border text-sm font-medium inline-flex items-center gap-2', cur === e.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>
+                        <span className={cn('h-6 w-6 rounded-full text-white text-[9px] font-bold flex items-center justify-center', colorFor(e.id))}>{initials(e.name)}</span>{e.name}
+                        {cur === e.id && <Check className="h-4 w-4" />}
+                      </button>
+                    ))}
+                  </div>
+                  {cur && <Button variant="ghost" className="text-red-500 gap-2 rounded-full h-8" onClick={() => { setOwner(live.id, null); setOwnerFor(null); }}><X className="h-4 w-4" />הסר אחראי</Button>}
+                  <div className="pt-2 border-t">
+                    <Button className="rounded-full gap-2 w-full" onClick={() => { setTaskFor(live); setOwnerFor(null); }}><ClipboardList className="h-4 w-4" />צור משימה על הלקוח</Button>
+                  </div>
+                </div>
               );
             })()}
           </SheetContent>
