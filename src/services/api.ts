@@ -21,17 +21,6 @@ class ApiService {
     this.refresh();
     console.log('Attempting login for:', email);
     
-    // Hardcode admin fallback if local storage is stale
-    if (email.toLowerCase() === 'admin@mas4u.co.il' && code === 'admin123') {
-       const adminUser = this.db.users.find(u => u.email.toLowerCase() === 'admin@mas4u.co.il');
-       if (adminUser) {
-           adminUser.personalCode = 'admin123';
-           saveDB(this.db);
-           console.log('Login successful (Admin Fallback):', adminUser.name);
-           return adminUser;
-       }
-    }
-
     const user = this.db.users.find(u => 
       u.email.toLowerCase() === email.toLowerCase() && 
       (u.personalCode === code || u.id === code) // Allow login with ID as fallback for new users
