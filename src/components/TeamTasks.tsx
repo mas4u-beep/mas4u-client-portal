@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Employee, TeamTask, TeamTaskStatus, DB, User, Notification } from '@/src/types';
 import { logActivity, buildAssigneeNotification } from '@/src/lib/mockData';
 import { toast } from 'sonner';
+import { MorningAssign } from './MorningAssign';
 
 interface TeamTasksProps {
   db: DB;
@@ -318,6 +319,8 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
           </CardContent>
         </Card>
       )}
+
+      <MorningAssign db={db} setDb={setDb} saveDB={saveDB} myName={myName} />
 
       {/* New task */}
       <Card className="border-none shadow-sm">

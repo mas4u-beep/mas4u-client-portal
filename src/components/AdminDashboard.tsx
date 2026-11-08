@@ -624,6 +624,20 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
         </div>
 
         <TabsContent value="overview" className="space-y-8">
+          {myOpenTasks.length > 0 && (
+            <div className="flex items-center justify-between gap-3 flex-wrap rounded-2xl border border-amber-300/60 bg-amber-50 p-4">
+              <div>
+                <p className="font-bold text-amber-900">
+                  {new Date().getHours() < 12 ? 'בוקר טוב' : new Date().getHours() < 18 ? 'צהריים טובים' : 'ערב טוב'}, {currentUser?.name?.split(' ')[0]}
+                </p>
+                <p className="text-sm text-amber-900">
+                  {myOpenTasks.length === 1 ? 'יש לך משימה אחת פתוחה להיום' : `יש לך ${myOpenTasks.length} משימות פתוחות להיום`}
+                  {myOpenTasks.some(t => t.priority === 'high') && ` · ${myOpenTasks.filter(t => t.priority === 'high').length} דחופות`}
+                </p>
+              </div>
+              <Button className="rounded-full" onClick={() => handleTabChange('tasks')}>לצפייה במשימות שלי</Button>
+            </div>
+          )}
           {/* Personal hub — quick access to everything */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {hubTiles.map((tile) => (
