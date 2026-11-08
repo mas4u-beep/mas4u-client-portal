@@ -189,7 +189,7 @@ export function Auth({ onLogin }: AuthProps) {
         className="w-full max-w-md"
       >
         <Card className="border-primary/10 shadow-2xl backdrop-blur-sm bg-card/95 rounded-3xl overflow-hidden">
-          <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 relative">
+          <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 pt-4 -mt-4 relative">
             <div className="flex justify-center mb-4 mt-2">
               <div className="rounded-full bg-primary/10 p-5 border border-primary/10 shadow-inner">
                 {isLogin ? <Lock className="h-8 w-8 text-primary" /> : <MessageCircle className="h-8 w-8 text-primary" />}
@@ -205,7 +205,7 @@ export function Auth({ onLogin }: AuthProps) {
           
           {isLogin ? (
             <form onSubmit={submitLogin}>
-              <CardContent className="space-y-5 pt-8">
+              <CardContent className="space-y-5 pt-8 pb-6">
                 <div className="space-y-3">
                   <Label htmlFor="loginEmail">אימייל</Label>
                   <div className="relative">
@@ -263,13 +263,6 @@ export function Auth({ onLogin }: AuthProps) {
                   לקוח חדש? בוא נכיר
                 </Button>
 
-                <button
-                  type="button"
-                  className="text-[10px] text-muted-foreground hover:text-destructive underline mt-2"
-                  onClick={() => setShowConfirmReset(true)}
-                >
-                  איפוס מערכת
-                </button>
               </CardFooter>
             </form>
           ) : (

@@ -669,7 +669,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
             <Card className="border-none shadow-sm">
               <CardHeader className="bg-green-50 border-b border-green-100">
                 <CardTitle className="text-lg flex items-center gap-2 text-green-800"><CheckCircle className="h-5 w-5" />משימות שהקצית — בוצעו</CardTitle>
-                <CardDescription className="text-green-700/80">{completedIAssigned.length > 0 ? `${completedIAssigned.length} משימות שהעברת הושלמו` : 'אין עדיין משימות שבוצעו'}</CardDescription>
+                <CardDescription className="text-green-800">{completedIAssigned.length > 0 ? `${completedIAssigned.length} משימות שהעברת הושלמו` : 'אין עדיין משימות שבוצעו'}</CardDescription>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
                 {completedIAssigned.length === 0 ? (
@@ -719,7 +719,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
               <CardHeader className="bg-amber-50 border-b border-amber-100 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2 text-amber-800"><Eye className="h-5 w-5" />לקוחות במעקב</CardTitle>
-                  <CardDescription className="text-amber-700/80">{watchedClients.length > 0 ? `${watchedClients.length} לקוחות דורשים תשומת לב` : 'אין לקוחות במעקב'}</CardDescription>
+                  <CardDescription className="text-amber-800">{watchedClients.length > 0 ? `${watchedClients.length} לקוחות דורשים תשומת לב` : 'אין לקוחות במעקב'}</CardDescription>
                 </div>
                 <Button size="sm" variant="ghost" className="rounded-full text-amber-800" onClick={() => handleTabChange('clients')}>לניהול לקוחות</Button>
               </CardHeader>
@@ -758,9 +758,9 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     const urgent = d.daysLeft <= 5;
                     return (
                       <div key={d.id} className={cn('flex items-center gap-3 p-3 rounded-xl border', urgent ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200')}>
-                        <div className={cn('h-9 w-9 rounded-lg flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-500' : 'bg-amber-500')}>
+                        <div className={cn('h-9 w-9 rounded-lg flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-700' : 'bg-amber-700')}>
                           <span className="text-xs font-bold leading-none">{d.daysLeft}</span>
-                          <span className="text-[8px]">ימים</span>
+                          <span className="text-[10px]">ימים</span>
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold truncate">{d.title}</p>
@@ -781,7 +781,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                   <AlertTriangle className="h-5 w-5" />
                   בקשות הרשמה ממתינות לאישור ({pendingUsers.length})
                 </CardTitle>
-                <CardDescription className="text-amber-700/80">
+                <CardDescription className="text-amber-800">
                   לקוחות חדשים שנרשמו דרך האתר וממתינים לאישור מנהל כדי לקבל גישה למערכת.
                 </CardDescription>
               </CardHeader>
@@ -815,7 +815,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     <CardTitle>לקוחות בסיכון (חסרי מסמכים)</CardTitle>
                     <CardDescription>לקוחות שלא העלו מסמכים לקראת מועדי הדיווח הקרובים</CardDescription>
                   </div>
-                  <Badge variant="destructive" className="animate-pulse">דחוף</Badge>
+                  <Badge variant="destructive" className="animate-pulse !text-red-800">דחוף</Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -842,7 +842,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                               חסרים {missingCount} מסמכים
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-green-600 text-xs font-bold">
+                            <div className="flex items-center gap-2 text-green-700 text-xs font-bold">
                               <CheckCircle className="h-3 w-3" />
                               עדכני
                             </div>
@@ -880,7 +880,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     )}>
                       {t.done && <CheckCircle className="h-3 w-3" />}
                     </div>
-                    <span className={cn("text-sm font-medium", t.done && "line-through opacity-50")}>{t.task}</span>
+                    <span className={cn("text-sm font-medium", t.done && "line-through text-muted-foreground")}>{t.task}</span>
                   </div>
                 ))}
                 <Button variant="outline" className="w-full rounded-full mt-4">הוספת משימה</Button>
@@ -1744,9 +1744,9 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                     return (
                       <div key={d.id} className={cn('flex items-center justify-between gap-3 p-3 rounded-xl border', urgent ? 'bg-red-50 border-red-200' : soon ? 'bg-amber-50 border-amber-200' : 'bg-background border-border/50')}>
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={cn('h-10 w-10 rounded-xl flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-500' : soon ? 'bg-amber-500' : 'bg-primary')}>
+                          <div className={cn('h-10 w-10 rounded-xl flex flex-col items-center justify-center text-white shrink-0', urgent ? 'bg-red-700' : soon ? 'bg-amber-700' : 'bg-primary')}>
                             <span className="text-sm font-bold leading-none">{d.daysLeft < 0 ? '!' : d.daysLeft}</span>
-                            <span className="text-[8px]">{d.daysLeft < 0 ? 'עבר' : 'ימים'}</span>
+                            <span className="text-[10px]">{d.daysLeft < 0 ? 'עבר' : 'ימים'}</span>
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-bold truncate">{d.title}</p>

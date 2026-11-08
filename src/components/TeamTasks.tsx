@@ -396,7 +396,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
         <Card className="border-none shadow-sm">
           <CardHeader className="bg-green-50 border-b border-green-100">
             <CardTitle className="text-lg flex items-center gap-2 text-green-800"><CheckCircle className="h-5 w-5" />משימות שהקצית — בוצעו</CardTitle>
-            <CardDescription className="text-green-700/80">{assignedByMeDone.length} משימות שהעברת הושלמו</CardDescription>
+            <CardDescription className="text-green-800">{assignedByMeDone.length} משימות שהעברת הושלמו</CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-2">
             {assignedByMeDone.slice(0, 8).map((t) => (

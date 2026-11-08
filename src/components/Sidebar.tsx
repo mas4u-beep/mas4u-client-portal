@@ -58,7 +58,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
           {groups.map((group) => (
             <div key={group.title || 'all'} className="space-y-1.5">
               {group.title && (
-                <div className="px-4 pb-1 text-[11px] font-bold tracking-wider text-muted-foreground/70">{group.title}</div>
+                <div className="px-4 pb-1 text-[11px] font-bold tracking-wider text-muted-foreground">{group.title}</div>
               )}
               {group.items.map((item) => (
                 <Button
@@ -72,7 +72,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
                       : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                   )}
                 >
-                  <item.icon className={cn("h-5 w-5", item.active ? "text-primary" : "text-muted-foreground/70")} />
+                  <item.icon className={cn("h-5 w-5", item.active ? "text-primary" : "text-muted-foreground")} />
                   {item.label}
                 </Button>
               ))}
@@ -82,7 +82,7 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
       </div>
       <div className="mt-auto border-t border-border/50 p-4 space-y-1.5">
         <Button variant="ghost" className="w-full justify-start gap-3 px-4 text-sm font-medium rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground">
-          <HelpCircle className="h-5 w-5 text-muted-foreground/70" />
+          <HelpCircle className="h-5 w-5 text-muted-foreground" />
           עזרה ותמיכה
         </Button>
         <Button 

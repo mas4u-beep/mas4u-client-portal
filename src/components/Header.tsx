@@ -260,7 +260,7 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative" aria-label="התראות">
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-white font-bold">
@@ -318,10 +318,10 @@ export function Header({ user, onLogout, onTabChange }: { user: any; onLogout: (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label={`${user?.name?.substring(0, 2) ?? ""} ${user?.name ?? ""} - תפריט משתמש`}>
                 <Avatar className="h-9 w-9">
                   <AvatarImage src={`https://picsum.photos/seed/${user?.email}/200`} alt={user?.name} />
-                  <AvatarFallback>{user?.name?.substring(0, 2)}</AvatarFallback>
+                  <AvatarFallback aria-hidden="true">{user?.name?.substring(0, 2)}</AvatarFallback>
                 </Avatar>
               </Button>
             }

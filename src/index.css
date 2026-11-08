@@ -61,7 +61,7 @@
     --secondary: oklch(0.967 0.003 264.542); /* Light slate-gray */
     --secondary-foreground: oklch(0.21 0.006 285.885);
     --muted: oklch(0.967 0.003 264.542);
-    --muted-foreground: oklch(0.553 0.013 258.079);
+    --muted-foreground: oklch(0.49 0.013 258.079);
     --accent: oklch(0.967 0.003 264.542); 
     --accent-foreground: oklch(0.21 0.006 285.885);
     --destructive: oklch(0.577 0.245 27.325); /* Professional red */
@@ -106,3 +106,5 @@
     direction: rtl;
     }
 }
+/* Accessible success toast text (contrast >= 4.5) */
+[data-sonner-toast][data-type="success"] { --success-text: #00662a; }
