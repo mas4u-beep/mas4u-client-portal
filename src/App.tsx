@@ -9,6 +9,7 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Auth } from './components/Auth';
+import { AccessibilityStatement } from './components/AccessibilityStatement';
 import { AIChatbot } from './components/AIChatbot';
 import { DocumentArchive } from './components/DocumentArchive';
 import { DocumentUpload } from './components/DocumentUpload';
@@ -38,6 +39,12 @@ export default function App() {
   // Bumped whenever another user changes the shared database (realtime),
   // forcing dependent views to re-read the latest data.
   const [syncTick, setSyncTick] = useState(0);
+  const [route, setRoute] = useState(window.location.hash);
+  useEffect(() => {
+    const onHash = () => setRoute(window.location.hash);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const taxCalendar = [
     { date: '15/04', title: 'דיווח מע"מ דו-חודשי', type: 'urgent' },
@@ -119,6 +126,8 @@ export default function App() {
     toast.info('התנתקת מהמערכת.');
   };
 
+  if (route === '#/accessibility') return <AccessibilityStatement />;
+
   if (!dbReady) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
@@ -129,7 +138,14 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <Auth onLogin={handleLogin} />;
+    return (
+      <>
+        <Auth onLogin={handleLogin} />
+        <div className="fixed bottom-2 inset-x-0 text-center text-sm">
+          <a href="#/accessibility" className="text-primary underline underline-offset-4">הצהרת נגישות</a>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -275,6 +291,9 @@ export default function App() {
             </>
           )}
         </main>
+        <footer className="border-t px-4 py-2 text-center text-sm">
+          <a href="#/accessibility" className="text-primary underline underline-offset-4">הצהרת נגישות</a>
+        </footer>
       </div>
       {(user?.role !== 'admin') && <AIChatbot />}
     </div>
