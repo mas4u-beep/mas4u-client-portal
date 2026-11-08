@@ -581,10 +581,10 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
       {/* Stats Overview */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { title: 'לקוחות פעילים', value: db.users.filter(u => u.role === 'client').length, icon: Users, color: 'text-blue-600', trend: '+12% החודש' },
-          { title: 'מסמכים לבדיקה', value: pendingDocs.length, icon: FileText, color: 'text-amber-600', trend: 'זמן טיפול ממוצע: 4 שעות' },
-          { title: 'פניות חדשות', value: unreadMessages.length, icon: MessageSquare, color: 'text-purple-600', trend: '3 דורשות טיפול דחוף' },
-          { title: 'הכנסה צפויה', value: '₪ 142,500', icon: TrendingUp, color: 'text-green-600', trend: '+5% משנה שעברה' },
+          { title: 'לקוחות פעילים', value: db.users.filter(u => u.role === 'client').length, icon: Users, color: 'text-blue-600', trend: `${db.users.filter(u => u.role === 'admin').length} אנשי צוות במערכת` },
+          { title: 'מסמכים לבדיקה', value: pendingDocs.length, icon: FileText, color: 'text-amber-600', trend: pendingDocs.length ? 'ממתינים לאישור' : 'הכול מעודכן' },
+          { title: 'פניות חדשות', value: unreadMessages.length, icon: MessageSquare, color: 'text-purple-600', trend: unreadMessages.length ? 'הודעות שלא נקראו' : 'אין הודעות חדשות' },
+          { title: 'משימות פתוחות', value: (db.teamTasks || []).filter(t => !t.isDone).length, icon: ClipboardList, color: 'text-green-600', trend: `${(db.teamTasks || []).filter(t => !t.isDone && t.priority === 'high').length} בעדיפות גבוהה` },
         ].map((stat, i) => (
           <Card key={i} className="border-none shadow-sm bg-card/50 backdrop-blur">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -1032,7 +1032,7 @@ export function AdminDashboard({ activeTab: externalTab, onTabChange, currentUse
                 </TableHeader>
                 <TableBody>
                   {[...filteredUsers].sort((a, b) => (a.lastName || a.name).localeCompare(b.lastName || b.name, 'he')).map((user) => {
-                    const docs = user.annualReportDocs || {};
+                    const docs = (user.annualReportDocs || {}) as Record<string, string>;
                     const getStatusColor = (status: string) => {
                       switch (status) {
                         case 'יש': return 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200';

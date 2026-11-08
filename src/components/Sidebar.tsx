@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, Bot, ClipboardList, History, CalendarClock, LayoutGrid, TrendingUp, Database } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, Settings, HelpCircle, LogOut, Users, Upload, Archive, BookOpen, Lightbulb, ClipboardList, History, CalendarClock, LayoutGrid, TrendingUp, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -19,24 +19,32 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
 }) {
-  const items = userRole === 'admin' 
-    ? [
-        { icon: LayoutDashboard, label: 'לוח בקרה', href: '#', active: activeTab === 'לוח בקרה' },
-        { icon: Users, label: 'לקוחות', href: '#', active: activeTab === 'לקוחות' },
-        { icon: LayoutGrid, label: 'תמונת מצב תיקים', href: '#', active: activeTab === 'תמונת מצב תיקים' },
-        { icon: Database, label: 'טבלאות', href: '#', active: activeTab === 'טבלאות' },
-        { icon: FileText, label: 'מסמכים', href: '#', active: activeTab === 'מסמכים' },
-        { icon: BookOpen, label: 'דוחות שנתיים', href: '#', active: activeTab === 'דוחות שנתיים' },
-        { icon: Bot, label: 'אוטומציות וסוכנים', href: '#', active: activeTab === 'אוטומציות וסוכנים' },
-        { icon: Lightbulb, label: 'ניהול ידע', href: '#', active: activeTab === 'ניהול ידע' },
-      { icon: ClipboardList, label: 'משימות צוות', href: '#', active: activeTab === 'משימות צוות' },
-        { icon: CalendarClock, label: 'מעקב דדליינים', href: '#', active: activeTab === 'מעקב דדליינים' },
-        { icon: History, label: 'יומן פעילות', href: '#', active: activeTab === 'יומן פעילות' },
-        { icon: TrendingUp, label: 'סיכום שבועי', href: '#', active: activeTab === 'סיכום שבועי' },
-        { icon: MessageSquare, label: 'פניות וצ\'אט', href: '#', active: activeTab === 'פניות וצ\'אט' },
-        { icon: Settings, label: 'הגדרות', href: '#', active: activeTab === 'הגדרות' },
-      ]
-    : navItems.map(item => ({ ...item, active: item.label === activeTab }));
+  const adminGroups = [
+    { title: 'ראשי', items: [
+      { icon: LayoutDashboard, label: 'לוח בקרה' },
+      { icon: Users, label: 'לקוחות' },
+      { icon: LayoutGrid, label: 'תמונת מצב תיקים' },
+      { icon: ClipboardList, label: 'משימות צוות' },
+    ] },
+    { title: 'מסמכים ודוחות', items: [
+      { icon: FileText, label: 'מסמכים' },
+      { icon: BookOpen, label: 'דוחות שנתיים' },
+      { icon: Database, label: 'טבלאות' },
+    ] },
+    { title: 'בקרה', items: [
+      { icon: CalendarClock, label: 'מעקב דדליינים' },
+      { icon: History, label: 'יומן פעילות' },
+      { icon: TrendingUp, label: 'סיכום שבועי' },
+    ] },
+    { title: 'כלים', items: [
+      { icon: MessageSquare, label: 'פניות וצ\'אט' },
+      { icon: Lightbulb, label: 'ניהול ידע' },
+      { icon: Settings, label: 'הגדרות' },
+    ] },
+  ];
+  const groups = userRole === 'admin'
+    ? adminGroups.map(g => ({ title: g.title, items: g.items.map(i => ({ ...i, active: activeTab === i.label })) }))
+    : [{ title: '', items: navItems.map(item => ({ ...item, active: item.label === activeTab })) }];
 
   return (
     <aside className="hidden w-64 flex-col border-l border-border/50 bg-background/95 backdrop-blur-xl lg:flex shadow-sm z-10">
@@ -46,22 +54,29 @@ export function Sidebar({ onLogout, userRole, activeTab, onTabChange }: {
         </span>
       </div>
       <div className="flex-1 overflow-y-auto py-6">
-        <nav className="space-y-1.5 px-3">
-          {items.map((item) => (
-            <Button
-              key={item.label}
-              variant={item.active ? 'secondary' : 'ghost'}
-              onClick={() => onTabChange?.(item.label)}
-              className={cn(
-                'w-full justify-start gap-3 px-4 py-6 text-sm font-medium transition-all duration-300 rounded-xl',
-                item.active 
-                  ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10' 
-                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+        <nav className="space-y-4 px-3">
+          {groups.map((group) => (
+            <div key={group.title || 'all'} className="space-y-1.5">
+              {group.title && (
+                <div className="px-4 pb-1 text-[11px] font-bold tracking-wider text-muted-foreground/70">{group.title}</div>
               )}
-            >
-              <item.icon className={cn("h-5 w-5", item.active ? "text-primary" : "text-muted-foreground/70")} />
-              {item.label}
-            </Button>
+              {group.items.map((item) => (
+                <Button
+                  key={item.label}
+                  variant={item.active ? 'secondary' : 'ghost'}
+                  onClick={() => onTabChange?.(item.label)}
+                  className={cn(
+                    'w-full justify-start gap-3 px-4 py-5 text-sm font-medium transition-all duration-300 rounded-xl',
+                    item.active
+                      ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10'
+                      : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                  )}
+                >
+                  <item.icon className={cn("h-5 w-5", item.active ? "text-primary" : "text-muted-foreground/70")} />
+                  {item.label}
+                </Button>
+              ))}
+            </div>
           ))}
         </nav>
       </div>

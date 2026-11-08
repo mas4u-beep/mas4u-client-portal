@@ -39,15 +39,15 @@ const adminNavItems = [
   { icon: LayoutDashboard, label: 'לוח בקרה' },
   { icon: UserIcon, label: 'לקוחות' },
   { icon: LayoutDashboard, label: 'תמונת מצב תיקים' },
-  { icon: FileText, label: 'טבלאות' },
+  { icon: FileText, label: 'משימות צוות' },
   { icon: FileText, label: 'מסמכים' },
   { icon: BookOpen, label: 'דוחות שנתיים' },
-  { icon: FileText, label: 'ניהול ידע' },
-  { icon: FileText, label: 'משימות צוות' },
+  { icon: FileText, label: 'טבלאות' },
   { icon: FileText, label: 'מעקב דדליינים' },
   { icon: FileText, label: 'יומן פעילות' },
   { icon: FileText, label: 'סיכום שבועי' },
   { icon: MessageSquare, label: "פניות וצ'אט" },
+  { icon: FileText, label: 'ניהול ידע' },
   { icon: Settings, label: 'הגדרות' },
 ];
 
