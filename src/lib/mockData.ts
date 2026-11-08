@@ -169,6 +169,7 @@ const INITIAL_DB: DB = {
 // ---------------------------------------------------------------------------
 
 import { supabase, APP_STATE_TABLE, APP_STATE_ID } from './supabaseClient';
+import { pushMerged, RemoteStore } from './merge';
 
 const DB_CHANGED_EVENT = 'mas4u-db-changed';
 
@@ -255,24 +256,79 @@ ensureStaffAccounts(_cache);
 
 export const getDB = (): DB => _cache;
 
+// The shared state as we last saw it on the server. Used to tell "I changed this"
+// apart from "someone else changed this" when merging.
+let _base: DB | null = null;
+const snapshot = (db: DB): DB => JSON.parse(JSON.stringify(db));
+
+// Reads and writes the shared row. Writes only succeed if nobody changed the row
+// since we read it (optimistic lock on the numeric `version` column); otherwise
+// pushMerged reads again, merges again and retries.
+const remoteStore: RemoteStore<DB> = {
+  async read() {
+    const { data, error } = await supabase!
+      .from(APP_STATE_TABLE)
+      .select('data, version')
+      .eq('id', APP_STATE_ID)
+      .maybeSingle();
+    if (error) throw error;
+    return data && data.data ? { data: normalize(data.data), version: String(data.version ?? 0) } : null;
+  },
+  async writeIf(next, expectedVersion) {
+    const now = new Date().toISOString();
+    if (expectedVersion === null) {
+      const { error } = await supabase!.from(APP_STATE_TABLE).insert({ id: APP_STATE_ID, data: next, updated_at: now, version: 1 });
+      if (error) { if (error.code === '23505') return false; throw error; }
+      return true;
+    }
+    const expected = Number(expectedVersion);
+    const { data, error } = await supabase!
+      .from(APP_STATE_TABLE)
+      .update({ data: next, updated_at: now, version: expected + 1 })
+      .eq('id', APP_STATE_ID)
+      .eq('version', expected)
+      .select('id');
+    if (error) throw error;
+    return !!(data && data.length);
+  },
+};
+
+let _pushing = false;
+let _dirty = false;
+
+// Pushes local changes to the server, merging with anything others saved meanwhile.
+// Calls made while a push is running are coalesced into one follow-up push.
+const pushShared = async () => {
+  if (!supabase) return;
+  if (_pushing) { _dirty = true; return; }
+  _pushing = true;
+  try {
+    do {
+      _dirty = false;
+      const merged = await pushMerged(remoteStore, _base, _cache);
+      if (_dirty) continue; // we edited again while pushing: merge once more from the same base
+      _base = snapshot(merged);
+      if (JSON.stringify(merged) !== JSON.stringify(_cache)) {
+        _cache = merged; // pick up what others changed
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache)); } catch { /* ignore */ }
+        window.dispatchEvent(new CustomEvent(DB_CHANGED_EVENT));
+      }
+    } while (_dirty);
+  } catch (e: any) {
+    const message = e?.message || String(e);
+    console.error('Supabase saveDB failed:', message);
+    // Surface silent write failures (e.g. session/permission issues) to the UI.
+    try { window.dispatchEvent(new CustomEvent('mas4u-save-error', { detail: message })); } catch { /* ignore */ }
+  } finally {
+    _pushing = false;
+  }
+};
+
 export const saveDB = (db: DB) => {
   _cache = normalize(db);
   const json = JSON.stringify(_cache);
   try { localStorage.setItem(STORAGE_KEY, json); } catch { /* ignore quota errors */ }
-
-  if (supabase) {
-    // Fire-and-forget push of the full shared state. Last write wins.
-    supabase
-      .from(APP_STATE_TABLE)
-      .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() })
-      .then(({ error }) => {
-        if (error) {
-          console.error('Supabase saveDB failed:', error.message);
-          // Surface silent write failures (e.g. session/permission issues) to the UI.
-          try { window.dispatchEvent(new CustomEvent('mas4u-save-error', { detail: error.message })); } catch { /* ignore */ }
-        }
-      });
-  }
+  void pushShared();
 };
 
 let _channel: any = null;
@@ -292,10 +348,12 @@ const startRealtime = () => {
       (payload: any) => {
         const incoming = payload?.new?.data;
         if (!incoming) return;
+        if (_pushing) return; // our push reads and merges the latest remote state itself
         const incomingJson = JSON.stringify(incoming);
         // Ignore the echo of our own write.
         if (incomingJson === JSON.stringify(_cache)) return;
         _cache = normalize(incoming);
+        _base = snapshot(_cache);
         try { localStorage.setItem(STORAGE_KEY, incomingJson); } catch { /* ignore */ }
         window.dispatchEvent(new CustomEvent(DB_CHANGED_EVENT));
       }
@@ -341,6 +399,7 @@ export const initDB = async (): Promise<void> => {
         .upsert({ id: APP_STATE_ID, data: _cache, updated_at: new Date().toISOString() });
       if (seedError) throw seedError;
     }
+    _base = snapshot(_cache);
     startRealtime();
   } catch (e: any) {
     console.error('Supabase init failed, using local storage only:', e?.message || e);
