@@ -202,14 +202,14 @@ const readLocal = (): DB => {
   }
 };
 
-// Default login details for the pre-seeded staff members. Every employee needs
-// a login account (role 'admin') so they can sign in on the office side.
-const STAFF_LOGIN_SEED: Record<string, { email: string; code: string }> = {
-  'אלמוג': { email: 'almog@mas4u.co.il', code: '4001' },
-  'נדיה': { email: 'nadia@mas4u.co.il', code: '4002' },
-  'מיכל': { email: 'michal@mas4u.co.il', code: '4003' },
-  'דורית': { email: 'dorit@mas4u.co.il', code: '4004' },
-  'נימרוד': { email: 'nimrod@mas4u.co.il', code: '4005' },
+// Default emails for the pre-seeded staff members. Passwords live only in
+// Supabase Auth; no login codes are stored in the shared data.
+const STAFF_EMAIL_SEED: Record<string, string> = {
+  'אלמוג': 'almog@mas4u.co.il',
+  'נדיה': 'nadia@mas4u.co.il',
+  'מיכל': 'michal@mas4u.co.il',
+  'דורית': 'dorit@mas4u.co.il',
+  'נימרוד': 'nimrod@mas4u.co.il',
 };
 
 /**
@@ -221,26 +221,23 @@ const ensureStaffAccounts = (db: DB): boolean => {
   let changed = false;
   (db.employees || []).forEach((emp, idx) => {
     if (!emp.email) {
-      emp.email = STAFF_LOGIN_SEED[emp.name]?.email || `staff${idx + 1}@mas4u.co.il`;
+      emp.email = STAFF_EMAIL_SEED[emp.name] || `staff${idx + 1}@mas4u.co.il`;
       changed = true;
     }
-    if (!emp.code) {
-      emp.code = STAFF_LOGIN_SEED[emp.name]?.code || String(4001 + idx);
-      changed = true;
-    }
+    // Remove any login code that an older version stored in the shared data.
+    if ((emp as any).code !== undefined) { delete (emp as any).code; changed = true; }
     const existing = db.users.find(
       (u) => u.email && u.email.toLowerCase() === emp.email!.toLowerCase()
     );
     if (existing) {
       if (existing.role !== 'admin') { existing.role = 'admin'; changed = true; }
-      if (existing.personalCode !== emp.code) { existing.personalCode = emp.code; changed = true; }
+      if (existing.personalCode !== undefined) { delete existing.personalCode; changed = true; }
     } else {
       db.users.push({
         id: `staff-${emp.id}`,
         name: emp.name,
         email: emp.email!,
         role: 'admin',
-        personalCode: emp.code,
         status: 'active',
         lastUpdate: new Date().toISOString(),
       } as User);

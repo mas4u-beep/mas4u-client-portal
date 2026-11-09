@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
-  CheckCircle, Plus, Trash2, User as UserIcon, Bell, ArrowLeftRight, UserPlus, KeyRound, Mail,
+  CheckCircle, Plus, Trash2, User as UserIcon, Bell, ArrowLeftRight, UserPlus, Mail,
   RotateCcw, Inbox, Calendar, Clock, PlayCircle, Link2, Search, AlertTriangle,
   GripVertical, ChevronUp, ChevronDown, HelpCircle, Send,
 } from 'lucide-react';
@@ -46,7 +46,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
   const [newDueDate, setNewDueDate] = useState('');
   const [assignee, setAssignee] = useState<string>('');
   const [showStaff, setShowStaff] = useState(false);
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', code: '' });
+  const [newStaff, setNewStaff] = useState({ name: '', email: '' });
 
   // Board filters
   const [boardSearch, setBoardSearch] = useState('');
@@ -242,17 +242,16 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
   const handleAddStaff = () => {
     const name = newStaff.name.trim();
     const email = newStaff.email.trim().toLowerCase();
-    const code = newStaff.code.trim();
-    if (!name || !email || !code) { toast.error('יש למלא שם, אימייל וקוד כניסה'); return; }
+    if (!name || !email) { toast.error('יש למלא שם ואימייל'); return; }
     if (db.users.some((u) => u.email && u.email.toLowerCase() === email) || employees.some((e) => e.email && e.email.toLowerCase() === email)) {
       toast.error('כתובת האימייל כבר קיימת במערכת'); return;
     }
     const id = `emp-${Date.now()}`;
-    const newEmp: Employee = { id, name, role: 'employee', email, code };
-    const newUser: User = { id: `staff-${id}`, name, email, role: 'admin', personalCode: code, status: 'active', lastUpdate: new Date().toISOString() } as User;
-    commit({ ...db, employees: [...employees, newEmp], users: [...db.users, newUser] }, `${name} נוסף/ה כאיש צוות ויכול/ה להתחבר`);
+    const newEmp: Employee = { id, name, role: 'employee', email };
+    const newUser: User = { id: `staff-${id}`, name, email, role: 'admin', status: 'active', lastUpdate: new Date().toISOString() } as User;
+    commit({ ...db, employees: [...employees, newEmp], users: [...db.users, newUser] }, `${name} נוסף/ה כאיש צוות — כדי שיוכל/תוכל להתחבר, יש לפתוח חשבון ב-Supabase עם אותו אימייל`);
     logActivity('הוסיף איש צוות', name);
-    setNewStaff({ name: '', email: '', code: '' });
+    setNewStaff({ name: '', email: '' });
   };
 
   // Sorting used by boards + my-tasks.
@@ -427,7 +426,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
         <Card className="border-none shadow-sm">
           <CardHeader className="bg-primary/5 border-b border-primary/10">
             <CardTitle className="text-lg text-primary">צוות המשרד והרשאות כניסה</CardTitle>
-            <CardDescription>לכל איש צוות יש התחברות אישית לצד המשרד (אימייל + קוד).</CardDescription>
+            <CardDescription>ההתחברות של כל איש צוות נעשית עם האימייל והסיסמה האישית שלו (הסיסמאות מוגדרות ב-Supabase ולא נשמרות באתר).</CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             <div className="grid gap-2">
@@ -438,18 +437,15 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{emp.email || '—'}</span>
-                    <span className="flex items-center gap-1"><KeyRound className="h-3 w-3" />קוד: <b className="text-foreground">{emp.code || '—'}</b></span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end pt-2 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end pt-2 border-t">
               <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground">שם איש צוות</label>
                 <Input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="שם מלא" className="h-10 rounded-full" /></div>
               <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground">אימייל להתחברות</label>
                 <Input value={newStaff.email} onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })} placeholder="name@mas4u.co.il" className="h-10 rounded-full" dir="ltr" /></div>
-              <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground">קוד כניסה</label>
-                <Input value={newStaff.code} onChange={(e) => setNewStaff({ ...newStaff, code: e.target.value })} placeholder="4006" className="h-10 rounded-full" dir="ltr" /></div>
               <Button onClick={handleAddStaff} className="h-10 rounded-full w-full gap-2"><UserPlus className="h-4 w-4" />הוסף איש צוות</Button>
             </div>
           </CardContent>
