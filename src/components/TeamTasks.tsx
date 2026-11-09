@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import {
   CheckCircle, Plus, Trash2, User as UserIcon, Bell, ArrowLeftRight, UserPlus, KeyRound, Mail,
   RotateCcw, Inbox, Calendar, Clock, PlayCircle, Link2, Search, AlertTriangle,
+  GripVertical, ChevronUp, ChevronDown, HelpCircle, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Employee, TeamTask, TeamTaskStatus, DB, User, Notification } from '@/src/types';
@@ -37,7 +38,7 @@ const fmtDate = (ymd?: string) => {
   return `${d}.${m}.${y.slice(2)}`;
 };
 
-type SortKey = 'smart' | 'due' | 'priority';
+type SortKey = 'manual' | 'smart' | 'due' | 'priority';
 
 export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
   const [newTask, setNewTask] = useState('');
@@ -49,13 +50,21 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
 
   // Board filters
   const [boardSearch, setBoardSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('smart');
+  const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [hideDone, setHideDone] = useState(true);
 
   // Reassign dialog (with reason)
   const [reassignFor, setReassignFor] = useState<TeamTask | null>(null);
   const [reassignTo, setReassignTo] = useState('');
   const [reassignReason, setReassignReason] = useState('');
+
+  // Drag & drop ordering, questions and clearing finished tasks
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [askFor, setAskFor] = useState<string | null>(null);
+  const [askText, setAskText] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const employees = db.employees || [];
   const tasks = db.teamTasks || [];
@@ -159,6 +168,77 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
     commit({ ...db, teamTasks: tasks.filter((t) => t.id !== taskId) }, 'המשימה נמחקה', 'info');
   };
 
+
+  // ---- Manual ordering -----------------------------------------------------
+  // `ids` is the list of open tasks of one employee in the order currently shown.
+  const applyOrder = (ids: string[]) => {
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    const newTasks = tasks.map((t) => (pos.has(t.id) ? { ...t, order: pos.get(t.id)! } : t));
+    setSortKey('manual');
+    commit({ ...db, teamTasks: newTasks });
+  };
+  const openIdsFor = (employeeId: string) =>
+    sortTasks(tasks.filter((t) => t.employeeId === employeeId && statusOf(t) !== 'done')).map((t) => t.id);
+  const dropOn = (targetId: string) => {
+    const dragged = tasks.find((t) => t.id === dragId);
+    const target = tasks.find((t) => t.id === targetId);
+    setDragId(null); setOverId(null);
+    if (!dragged || !target || dragged.id === target.id || dragged.employeeId !== target.employeeId) return;
+    const ids = openIdsFor(dragged.employeeId).filter((id) => id !== dragged.id);
+    ids.splice(ids.indexOf(target.id), 0, dragged.id);
+    applyOrder(ids);
+  };
+  const moveBy = (task: TeamTask, delta: number) => {
+    const ids = openIdsFor(task.employeeId);
+    const i = ids.indexOf(task.id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    applyOrder(ids);
+  };
+
+  // ---- Questions on a task -------------------------------------------------
+  const sendQuestion = (task: TeamTask) => {
+    const text = askText.trim();
+    if (!text) { toast.error('כתוב את השאלה'); return; }
+    const now = new Date().toISOString();
+    const q = { id: `q-${Date.now()}`, from: myName, text, at: now };
+    const assigner = db.users.find((u) => u.name === task.assignedByName);
+    const notif: Notification | null = assigner && assigner.name !== myName ? {
+      id: `n-${Date.now()}-q`, userId: assigner.id, title: 'שאלה על משימה ❓',
+      message: `${myName} שואל/ת על "${task.task}": ${text}`, timestamp: now, isRead: false, type: 'warning',
+    } : null;
+    const newTasks = tasks.map((t) => (t.id === task.id ? { ...t, questions: [...(t.questions || []), q], activity: [...(t.activity || []), { text: `${myName} שאל/ה שאלה`, at: now }] } : t));
+    commit({ ...db, teamTasks: newTasks, notifications: notif ? [...(db.notifications || []), notif] : db.notifications },
+      notif ? 'השאלה נשלחה' : 'השאלה נשמרה על המשימה');
+    logActivity('שאל שאלה על משימה', `"${task.task}"`);
+    setAskFor(null); setAskText('');
+  };
+  const answerQuestion = (task: TeamTask, qid: string) => {
+    const text = (answers[qid] || '').trim();
+    if (!text) { toast.error('כתוב תשובה'); return; }
+    const now = new Date().toISOString();
+    const q = (task.questions || []).find((x) => x.id === qid);
+    if (!q) return;
+    const asker = db.users.find((u) => u.name === q.from);
+    const notif: Notification | null = asker && asker.name !== myName ? {
+      id: `n-${Date.now()}-a`, userId: asker.id, title: 'ענו לשאלה שלך',
+      message: `${myName} ענה/תה על "${task.task}": ${text}`, timestamp: now, isRead: false, type: 'info',
+    } : null;
+    const newTasks = tasks.map((t) => (t.id === task.id
+      ? { ...t, questions: (t.questions || []).map((x) => (x.id === qid ? { ...x, answer: text, answeredBy: myName, answeredAt: now } : x)), activity: [...(t.activity || []), { text: `${myName} ענה/תה על שאלה`, at: now }] }
+      : t));
+    commit({ ...db, teamTasks: newTasks, notifications: notif ? [...(db.notifications || []), notif] : db.notifications }, 'התשובה נשלחה');
+    setAnswers((a) => { const n = { ...a }; delete n[qid]; return n; });
+  };
+
+  const clearDone = () => {
+    if (!confirmClear) { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 5000); return; }
+    const ids = new Set(assignedByMeDone.map((t) => t.id));
+    commit({ ...db, teamTasks: tasks.filter((t) => !ids.has(t.id)) }, `${ids.size} משימות שבוצעו נוקו`, 'info');
+    setConfirmClear(false);
+  };
+
   const handleAddStaff = () => {
     const name = newStaff.name.trim();
     const email = newStaff.email.trim().toLowerCase();
@@ -182,6 +262,11 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
       // Done always sinks.
       const ad = statusOf(a) === 'done' ? 1 : 0, bd = statusOf(b) === 'done' ? 1 : 0;
       if (ad !== bd) return ad - bd;
+      if (sortKey === 'manual' && (a.order !== undefined || b.order !== undefined)) {
+        // tasks without a manual position go after the ones the employee arranged
+        const ao = a.order ?? 1e9, bo = b.order ?? 1e9;
+        if (ao !== bo) return ao - bo;
+      }
       if (sortKey === 'priority') return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
       if (sortKey === 'due') {
         const av = a.dueDate || '9999', bv = b.dueDate || '9999';
@@ -212,9 +297,25 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
     const st = statusOf(task);
     const done = st === 'done';
     const overdue = isOverdue(task);
+    const canDrag = !done;
+    const pendingQs = (task.questions || []).filter((q) => !q.answer);
+    const iAmAsker = task.assignedByName === myName;
     return (
-      <div className={cn('p-3 rounded-xl border transition-all', done ? 'bg-muted/20 border-transparent opacity-70' : overdue ? 'bg-red-50/60 border-red-200 shadow-sm' : 'bg-background border-primary/10 shadow-sm')}>
+      <div
+        draggable={canDrag}
+        onDragStart={(e) => { if (!canDrag) return; setDragId(task.id); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragOver={(e) => { if (dragId && dragId !== task.id) { e.preventDefault(); setOverId(task.id); } }}
+        onDrop={(e) => { e.preventDefault(); dropOn(task.id); }}
+        onDragEnd={() => { setDragId(null); setOverId(null); }}
+        className={cn('p-3 rounded-xl border transition-all', canDrag && 'cursor-grab active:cursor-grabbing', dragId === task.id && 'opacity-40', overId === task.id && dragId !== task.id && 'ring-2 ring-primary', done ? 'bg-muted/20 border-transparent opacity-70' : overdue ? 'bg-red-50/60 border-red-200 shadow-sm' : 'bg-background border-primary/10 shadow-sm')}>
         <div className="flex items-start justify-between gap-2">
+          {canDrag && (
+            <div className="flex flex-col items-center shrink-0 -mr-1">
+              <button type="button" aria-label="הזז משימה למעלה" className="h-5 w-6 text-muted-foreground hover:text-primary" onClick={() => moveBy(task, -1)}><ChevronUp className="h-4 w-4 mx-auto" /></button>
+              <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <button type="button" aria-label="הזז משימה למטה" className="h-5 w-6 text-muted-foreground hover:text-primary" onClick={() => moveBy(task, 1)}><ChevronDown className="h-4 w-4 mx-auto" /></button>
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{task.task}</p>
             <div className="flex items-center gap-2 flex-wrap mt-1.5">
@@ -258,6 +359,11 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
                   <RotateCcw className="h-3.5 w-3.5" />החזר לפתוחה
                 </Button>
               )}
+              {task.assignedByName && !iAmAsker && (
+                <Button size="sm" variant="outline" className="rounded-full gap-1 h-8" onClick={() => { setAskFor(askFor === task.id ? null : task.id); setAskText(''); }}>
+                  <HelpCircle className="h-3.5 w-3.5" />שאלה
+                </Button>
+              )}
               {employees.length > 1 && (
                 <Button size="sm" variant="outline" className="rounded-full gap-1 h-8" onClick={() => openReassign(task)}>
                   <ArrowLeftRight className="h-3.5 w-3.5" />העבר
@@ -266,6 +372,36 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
             </>
           )}
         </div>
+
+        {askFor === task.id && (
+          <div className="mt-3 flex gap-2">
+            <Input value={askText} onChange={(e) => setAskText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendQuestion(task)} autoFocus
+              aria-label="השאלה שלך על המשימה" placeholder={`מה תרצה לשאול את ${task.assignedByName}?`} className="h-9 rounded-xl" />
+            <Button size="sm" className="rounded-full gap-1 h-9" onClick={() => sendQuestion(task)}><Send className="h-3.5 w-3.5" />שלח</Button>
+          </div>
+        )}
+
+        {(task.questions || []).length > 0 && (
+          <div className="mt-3 space-y-2">
+            {(task.questions || []).map((q) => (
+              <div key={q.id} className={cn('rounded-lg border p-2 text-sm', q.answer ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200')}>
+                <p><span className="font-bold">{q.from} שאל/ה:</span> {q.text}</p>
+                {q.answer ? (
+                  <p className="mt-1 text-green-900"><span className="font-bold">{q.answeredBy} ענה/תה:</span> {q.answer}</p>
+                ) : iAmAsker ? (
+                  <div className="mt-2 flex gap-2">
+                    <Input value={answers[q.id] || ''} onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && answerQuestion(task, q.id)}
+                      aria-label="תשובה לשאלה" placeholder="כתוב תשובה..." className="h-9 rounded-xl bg-background" />
+                    <Button size="sm" className="rounded-full h-9" onClick={() => answerQuestion(task, q.id)}>ענה</Button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-amber-900 text-xs">ממתין לתשובה מ{task.assignedByName}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {pendingQs.length > 0 && iAmAsker && <span className="sr-only">יש שאלות שממתינות לתשובה</span>}
       </div>
     );
   };
@@ -400,9 +536,12 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
           <CardHeader className="bg-green-50 border-b border-green-100">
             <CardTitle className="text-lg flex items-center gap-2 text-green-800"><CheckCircle className="h-5 w-5" />משימות שהקצית — בוצעו</CardTitle>
             <CardDescription className="text-green-800">{assignedByMeDone.length} משימות שהעברת הושלמו</CardDescription>
+            <Button size="sm" variant="outline" className="rounded-full w-fit mt-2 border-green-300 text-green-900" onClick={clearDone}>
+              <Trash2 className="h-3.5 w-3.5 ml-1" />{confirmClear ? 'בטוח? לחץ שוב לניקוי' : 'נקה את כל מה שבוצע'}
+            </Button>
           </CardHeader>
           <CardContent className="p-4 space-y-2">
-            {assignedByMeDone.slice(0, 8).map((t) => (
+            {assignedByMeDone.map((t) => (
               <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-green-50/50 border border-green-100">
                 <span className="text-sm line-through text-muted-foreground">{t.task}</span>
                 <span className="text-[11px] text-green-700 font-bold">✓ {t.assigneeName || ''}</span>
@@ -419,7 +558,7 @@ export function TeamTasks({ db, setDb, saveDB, currentUser }: TeamTasksProps) {
           <Input value={boardSearch} onChange={(e) => setBoardSearch(e.target.value)} placeholder="חיפוש משימה / לקוח..." className="h-9 w-56 rounded-full pr-9" />
         </div>
         <span className="text-xs text-muted-foreground">מיון:</span>
-        {([['smart', 'חכם'], ['due', 'לפי יעד'], ['priority', 'לפי עדיפות']] as [SortKey, string][]).map(([k, l]) => (
+        {([['manual', 'הסדר שלי'], ['smart', 'חכם'], ['due', 'לפי יעד'], ['priority', 'לפי עדיפות']] as [SortKey, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setSortKey(k)} className={cn('px-3 h-8 rounded-full border text-xs font-medium', sortKey === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border/60 hover:bg-primary/5')}>{l}</button>
         ))}
         <button onClick={() => setHideDone((v) => !v)} className={cn('px-3 h-8 rounded-full border text-xs font-medium', hideDone ? 'bg-muted text-foreground border-border/60' : 'bg-green-50 text-green-700 border-green-200')}>

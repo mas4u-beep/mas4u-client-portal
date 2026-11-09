@@ -148,6 +148,16 @@ export interface TeamTaskActivity {
   at: string;
 }
 
+export interface TeamTaskQuestion {
+  id: string;
+  from: string;        // who asked
+  text: string;
+  at: string;
+  answer?: string;
+  answeredBy?: string;
+  answeredAt?: string;
+}
+
 export type TeamTaskStatus = 'open' | 'in_progress' | 'done';
 
 export interface TeamTask {
@@ -164,6 +174,8 @@ export interface TeamTask {
   assignedByName?: string;     // who created / last assigned the task
   assigneeName?: string;       // denormalized assignee name for display
   activity?: TeamTaskActivity[]; // hand-off / status trail
+  order?: number;              // manual position inside the assignee's list (lower = higher)
+  questions?: TeamTaskQuestion[]; // questions from the assignee, answered by the assigner
 }
 
 export interface ActivityEntry {
